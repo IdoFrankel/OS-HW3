@@ -56,3 +56,4 @@ server
 public/favicon.ico
 public/home.html
 public/output.cgi
+.vscode/settings.json
