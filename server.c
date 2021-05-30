@@ -27,12 +27,76 @@ void getargs(int *port, int *threads, int *queue_size, int argc, char *argv[])
     *queue_size = atoi(argv[3]);
 }
 
+#pragma region locs and conditions
+int threadsCount, queueSize;
+
+struct queue *running;
+struct queue *waiting;
+
+pthread_mutex_t running_m;
+pthread_mutex_t waiting_m;
+
+// pthread_cond_t running_c;
+// pthread_cond_t waiting_c;
+
+pthread_cond_t running_insert_allow;
+pthread_cond_t waiting_insert_allow;
+
+pthread_cond_t running_delete_allow;
+pthread_cond_t waiting_delete_allow;
+
+#pragma endregion
+
+void requestHandleWrapper(int fd)
+{
+    printf("server.c 1\n");
+    requestHandle(fd);
+
+    printf("server.c 2\n");
+
+    // dequeue element and send running_insert_allow signal.
+    dequeue(running, &running_m, &running_insert_allow);
+    printf("server.c 3\n");
+
+    // close socket fd
+    Close(fd);
+}
+
+void requestWaitingHandleWrapper()
+{
+    //TODO- - BUG ?
+    // should lock the waiting queue ?
+
+    // waits until available work thread.
+    pthread_mutex_lock(&running_m);
+    while (size(running) == threadsCount)
+    {
+        pthread_cond_wait(&running_insert_allow, &running_m);
+    }
+    printf("waiting handler wrapper");
+
+    // dequeue waiting requests, and adds it to running queue.
+    pthread_mutex_lock(&waiting_m);
+    int fd = dequeue_noLock(waiting);
+    enqueue_noLock(running, fd);
+    // sends signal to notify empty space in waiting queue.
+    pthread_cond_signal(&waiting_insert_allow);
+
+    // release both queues.
+    pthread_mutex_unlock(&waiting_m);
+    pthread_mutex_unlock(&running_m);
+
+    // not sure if supose to be inside the previous lock.
+    pthread_t t;
+    pthread_create(&t, NULL, requestHandleWrapper, fd);
+}
+
 int main(int argc, char *argv[])
 {
     int listenfd, connfd, port, clientlen;
     struct sockaddr_in clientaddr;
 
-    int threadsCount, queueSize;
+    // int threadsCount, queueSize;
 
     getargs(&port, &threadsCount, &queueSize, argc, argv);
 
@@ -68,8 +132,8 @@ int main(int argc, char *argv[])
 
     */
 
-    struct queue *running = createQueue();
-    struct queue *waiting = createQueue();
+    running = createQueue();
+    waiting = createQueue();
 
     listenfd = Open_listenfd(port);
     while (1)
@@ -87,24 +151,23 @@ int main(int argc, char *argv[])
         // pherhaps need for each queue diffrent cond_t.
         // plus cond_t for when a reuqest is finished. ??
 
-        pthread_cond_t running_c;
-        pthread_mutex_t running_m;
-        pthread_cond_init(&running_c, NULL);
         pthread_mutex_init(&running_m, NULL);
-
-        pthread_cond_t waiting_c;
-        pthread_mutex_t waiting_m;
-        pthread_cond_init(&waiting_c, NULL);
         pthread_mutex_init(&waiting_m, NULL);
+
+        pthread_cond_init(&running_insert_allow, NULL);
+        pthread_cond_init(&running_delete_allow, NULL);
+
+        pthread_cond_init(&waiting_insert_allow, NULL);
+        pthread_cond_init(&waiting_delete_allow, NULL);
 #pragma endregion
+
         if (size(running) < threadsCount)
         {
-            enqueue(running, connfd, &running_m, &running_c);
+            printf("server.c 20\n");
+            enqueue(running, connfd, &running_m, &running_delete_allow);
             pthread_t t;
-            pthread_create(&t, NULL, requestHandle, connfd);
-            printf("inside 4\n");
-
-            printf("print after pthread_create line 107 server\n");
+            printf("server.c 21\n");
+            pthread_create(&t, NULL, requestHandleWrapper, connfd);
 
             // how do we dequeue from ruuning and sending signal ? create a wrapper method to requestsHandler ?
             // dequeue(running, &running_m, &running_c);
@@ -112,43 +175,49 @@ int main(int argc, char *argv[])
         }
         else
         {
+            printf("server.c 30\n");
             // waiting queue is not full
             if (size(waiting) < queueSize - size(running))
             {
-                enqueue(waiting, connfd, &waiting_m, &waiting_c);
+                printf("server.c 31\n");
+
+                enqueue(waiting, connfd, &waiting_m, &waiting_delete_allow);
+                printf("server.c 32\n");
+
+                pthread_t t;
+                pthread_create(&t, NULL, requestWaitingHandleWrapper, NULL);
+                printf("parent after requestWaitingHandleWrapper 4\n");
 
                 // should wait for signal from dequeuing of running (running_c)
 
                 // 1. lock waiting queue. and dequeue element.
                 // 2. lock running queue and enqueue element.
                 // 3. run the newly added element.
-
-                /* -- not completed code --
-                    //not entierly sure.
-                    pthread_mutex_lock(&m);
-                    while (size(running) == threadsCount)
-                    {
-                        pthread_cond_wait(&c, &m);
-                    }
-                    insert first item in waiting to last in qnqueue and create thread for it.
-                    pthread_mutex_unlock();
-                    */
             }
             else
             {
+                printf("server.c 50\n");
+
                 // ===== Hold and block new requests, until there is space in waiting queue.
 
-                // todo - should  lock running queue as well ?  because using size(running)
                 pthread_mutex_lock(&waiting_m);
+
+                printf("server.c 51\n");
 
                 while (size(waiting) + size(running) == queueSize)
                 {
                     // the cond_t is for dequeuing from waiting.
-                    pthread_cond_wait(&waiting_c, &waiting_m);
+                    pthread_cond_wait(&waiting_m, &waiting_insert_allow);
                 }
+
+                printf("server.c 52\n");
 
                 // enqueue to waiting without locking.
                 enqueue_noLock(waiting, connfd);
+                // signal  pthread_cond_signal(&waiting_delete_allow); ?
+
+                printf("server.c 53\n");
+
                 pthread_mutex_unlock(&waiting_m);
             }
         }
