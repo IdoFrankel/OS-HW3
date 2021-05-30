@@ -25,19 +25,18 @@ void getargs(int *port, int *threads, int *queue_size, int argc, char *argv[])
     *port = atoi(argv[1]);
     *threads = atoi(argv[2]);
     *queue_size = atoi(argv[3]);
+    schedalg = argv[4];
 }
 
 #pragma region locs and conditions
 int threadsCount, queueSize;
+char *schedalg;
 
 struct queue *running;
 struct queue *waiting;
 
 pthread_mutex_t running_m;
 pthread_mutex_t waiting_m;
-
-// pthread_cond_t running_c;
-// pthread_cond_t waiting_c;
 
 pthread_cond_t running_insert_allow;
 pthread_cond_t waiting_insert_allow;
@@ -55,7 +54,14 @@ void requestHandleWrapper(int fd)
     printf("server.c 2\n");
 
     // dequeue element and send running_insert_allow signal.
-    dequeue(running, &running_m, &running_insert_allow);
+    int returnedFd = dequeue(running, &running_m, &running_insert_allow);
+
+    if (returnedFd != fd)
+    {
+        printf(" *** BUG  ***");
+        printf("dequing from running queue returned diffrent socket to close.\n");
+    }
+
     printf("server.c 3\n");
 
     // close socket fd
@@ -168,10 +174,6 @@ int main(int argc, char *argv[])
             pthread_t t;
             printf("server.c 21\n");
             pthread_create(&t, NULL, requestHandleWrapper, connfd);
-
-            // how do we dequeue from ruuning and sending signal ? create a wrapper method to requestsHandler ?
-            // dequeue(running, &running_m, &running_c);
-            // send close(connfd) as well.
         }
         else
         {
@@ -181,13 +183,7 @@ int main(int argc, char *argv[])
             {
                 printf("server.c 31\n");
 
-                enqueue(waiting, connfd, &waiting_m, &waiting_delete_allow);
-                printf("server.c 32\n");
-
-                pthread_t t;
-                pthread_create(&t, NULL, requestWaitingHandleWrapper, NULL);
-                printf("parent after requestWaitingHandleWrapper 4\n");
-
+                AddRequestToWaitingQueue(connfd);
                 // should wait for signal from dequeuing of running (running_c)
 
                 // 1. lock waiting queue. and dequeue element.
@@ -198,28 +194,80 @@ int main(int argc, char *argv[])
             {
                 printf("server.c 50\n");
 
-                // ===== Hold and block new requests, until there is space in waiting queue.
-
-                pthread_mutex_lock(&waiting_m);
-
-                printf("server.c 51\n");
-
-                while (size(waiting) + size(running) == queueSize)
+                if (strcasecmp(schedalg, "block"))
                 {
-                    // the cond_t is for dequeuing from waiting.
-                    pthread_cond_wait(&waiting_m, &waiting_insert_allow);
+                    OverloadHandling_Block(connfd);
                 }
-
-                printf("server.c 52\n");
-
-                // enqueue to waiting without locking.
-                enqueue_noLock(waiting, connfd);
-                // signal  pthread_cond_signal(&waiting_delete_allow); ?
-
-                printf("server.c 53\n");
-
-                pthread_mutex_unlock(&waiting_m);
+                else if (strcasecmp(schedalg, "dt"))
+                {
+                    OverloadHandling_DropTail(connfd);
+                }
+                else if (strcasecmp(schedalg, "sh"))
+                {
+                }
+                else if (strcasecmp(schedalg, "random"))
+                {
+                }
             }
         }
     }
 }
+
+void AddRequestToWaitingQueue(connfd)
+{
+    enqueue(waiting, connfd, &waiting_m, &waiting_delete_allow);
+    printf("server.c 32\n");
+
+    pthread_t t;
+    pthread_create(&t, NULL, requestWaitingHandleWrapper, NULL);
+    printf("parent after requestWaitingHandleWrapper 4\n");
+}
+
+#pragma region overload handling procedures
+
+void OverloadHandling_Block(int connfd)
+{
+    // ===== Hold and block new requests, until there is space in waiting queue.
+
+    pthread_mutex_lock(&waiting_m);
+
+    printf("server.c 51\n");
+
+    while (size(waiting) + size(running) == queueSize)
+    {
+        // the cond_t is for dequeuing from waiting.
+        pthread_cond_wait(&waiting_m, &waiting_insert_allow);
+    }
+
+    printf("server.c 52\n");
+
+    // enqueue to waiting without locking.
+    enqueue_noLock(waiting, connfd);
+    // signal  pthread_cond_signal(&waiting_delete_allow); ?
+
+    printf("server.c 53\n");
+
+    pthread_mutex_unlock(&waiting_m);
+}
+
+void OverloadHandling_DropTail(int connfd)
+{
+    Close(connfd);
+}
+
+void OverloadHandling_DropHead(int connfd)
+{
+    // DEQUEUE FROM WAITING.
+
+    // delete the thread itself, it is not enough just to remove from queue. ??
+
+    // ENQUEUE TO WAITING.
+    // AddRequestToWaitingQueue(connfd);
+}
+
+void OverloadHandling_Random(int connfd)
+{
+    //TODO IMPLEMENT
+}
+
+#pragma endregion
