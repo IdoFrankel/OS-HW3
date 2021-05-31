@@ -70,7 +70,7 @@ void requestHandleWrapper(int fd)
     printf("ttid = %d |\t server.c 2\n", gettid());
 
     // dequeue element and send running_insert_allow signal.
-    int returnedFd = dequeue(running, &running_m, &running_insert_allow);
+    int returnedFd = dequeueByFd(running, &running_m, &running_insert_allow, fd);
 
     if (returnedFd != fd)
     {
@@ -78,7 +78,6 @@ void requestHandleWrapper(int fd)
         printf("dequing from running queue returned diffrent socket to close.\n");
     }
 
-    // TODO BUG - WORKER THREADS BLOCK EACH OTHER.
     printf("ttid = %d |\t server.c 3\n", gettid());
 
     // close socket fd
@@ -96,21 +95,28 @@ void requestWaitingHandleWrapper(int connfd)
     while (size(running) == threadsCount)
     {
         pthread_cond_wait(&running_insert_allow, &running_m);
+        printf(" *** ");
     }
     printf("empty space in running queue is available.\n");
 
+    printf("waiting queue size : %d \n", size(waiting));
     // dequeue waiting requests, and adds it to running queue.
-    pthread_mutex_lock(&waiting_m);
 
-    int fd = dequeue_noLock(waiting);
-    printf("dequeue socet %d from waiting queue and enqueue to running queue\n", fd);
+    // pthread_mutex_lock(&waiting_m);
+
+    /* DELETE THIS ?
+                // int fd = dequeue_noLock(waiting);
+
+                // // sends signal to notify empty space is available in waiting queue.
+                // printf("dequeue socket %d from waiting queue and enqueue to running queue\n", fd);
+                // pthread_cond_signal(&waiting_insert_allow);
+                // pthread_mutex_unlock(&waiting_m);
+    */
+
+    // dequeue waiting requests, and adds it to running queue.
+    int fd = dequeue(waiting, &waiting_m, &waiting_insert_allow);
+
     enqueue_noLock(running, fd);
-
-    // sends signal to notify empty space is available in waiting queue.
-    pthread_cond_signal(&waiting_insert_allow);
-
-    // release both queues.
-    pthread_mutex_unlock(&waiting_m);
     pthread_mutex_unlock(&running_m);
 
     // not sure if supose to be inside the previous lock.
@@ -189,12 +195,12 @@ int main(int argc, char *argv[])
 
         // TODO - should lock before size ???
 
-        printf("server .c running =%d \t threadsCount =%d\n", size(running), threadsCount);
+        printf("server.c socketFD =%d running =%d \t threadsCount =%d\n", connfd, size(running), threadsCount);
         if (size(running) < threadsCount)
         {
             printf("ttid = %d |\t server.c 20\n", gettid());
 
-            // conside moving inside the requestHandle BUT
+            // consider moving inside the requestHandle BUT
             // IF DO SO SEE LINE 116, in WAITING HANDLER WE ADD A REQUEST TO THE QUEUE, AND THEN CREATING THE THREAD
             // SO WE WILL ENTER SAME FD TWICE PROBLEM !! TODO
             enqueue(running, connfd, &running_m, &running_delete_allow);

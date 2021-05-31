@@ -17,7 +17,7 @@
 typedef struct node
 {
     int data;
-    struct node *next;
+    struct node *next, *prev;
 } node;
 
 typedef struct queue
@@ -39,6 +39,7 @@ void enqueue_noLock(struct queue *q, int data)
     printf("ttid = %d |\t queue.c 3\n", gettid());
     node *n = (struct node *)malloc(sizeof(struct node));
     n->next = NULL;
+    n->prev = NULL;
     n->data = data;
 
     printf("ttid = %d |\t queue.c 4\n", gettid());
@@ -49,6 +50,7 @@ void enqueue_noLock(struct queue *q, int data)
 
     if (q->back != NULL)
     {
+        n->prev = q->back;
         q->back->next = n;
     }
 
@@ -79,19 +81,23 @@ int dequeue_noLock(struct queue *q)
 {
     printf("ttid = %d |\t queue.c 12\n", gettid());
 
-    node *head = q->front;
+    node *old_head = q->front;
     printf("ttid = %d |\t queue.c 12.1\n", gettid());
 
     q->front = q->front->next;
+    if (q->front != NULL)
+    {
+        q->front->prev = NULL;
+    }
 
     printf("ttid = %d |\t queue.c 12.2\n", gettid());
     q->size -= 1;
     printf("ttid = %d |\t queue.c 12.3\n", gettid());
 
-    int data = head->data;
+    int data = old_head->data;
     printf("ttid = %d |\t queue.c 12.4\n", gettid());
 
-    free(head);
+    free(old_head);
 
     printf("ttid = %d |\t queue.c 12.5\n", gettid());
 
@@ -124,7 +130,65 @@ int dequeue(struct queue *q, pthread_mutex_t *m, pthread_cond_t *c)
     return data;
 }
 
+int dequeueByFd(struct queue *q, pthread_mutex_t *m, pthread_cond_t *c, int fd)
+{
+    printf("ttid = %d |\t queue.c 17\n", gettid());
+    pthread_mutex_lock(m);
+    printf("ttid = %d |\t queue.c 18\n", gettid());
+
+    struct node *n = q->front;
+    while (n->next != NULL && n->data != fd)
+    {
+        n = n->next;
+    }
+
+    if (n->next == NULL && n->data != fd)
+    {
+        char content[MAXBUF];
+        // *** BUG ***
+        printf("BUGGGGG");
+        sprintf(content, "%s %d wasnt inside the queue\n", content, fd);
+        app_error(content);
+    }
+    else
+    {
+        // remove n
+        if (q->front == n)
+        {
+            q->front = n->next;
+        }
+        if (q->back == n)
+        {
+            q->back = n->prev;
+        }
+
+        if (n->next != NULL)
+        {
+            n->next->prev = n->prev;
+        }
+        if (n->prev != NULL)
+        {
+            n->prev->next = n->next;
+        }
+
+        printf("signal running_insert_allow\n");
+        q->size -= 1;
+
+        pthread_cond_signal(c);
+        int returnedFd = n->data;
+
+        pthread_mutex_unlock(m);
+
+        free(n);
+        return returnedFd;
+    }
+}
+
+// TODO shpould be locked?
+// IF YES, THERE IS A PROBLEM, SINCE THERE ARE CALSL TO SIZE WITHIN LOCKS
+// IN THAT CASE, RE LOCK WILL CAUSE ERROR, PROBLEM !!
 int size(struct queue *q)
 {
-    return q->size;
+    int size = q->size;
+    return size;
 }

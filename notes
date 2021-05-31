@@ -1,14 +1,5 @@
 notes
 
-in server.c
-
-when adding new element to running queue, should it be inside a lock? yes
-who can access it ? other threads who finised running.
-
-was thinking
-adding new element to running queue.
-    if full, than adding new elements to waiting queue.
-        if full, blocking ??
-when dequeue from running queue, send signal c1, 
-so the waiting threads in waiting queue will choose one and insert it to the queue, and create new thread.
-
+should size be locked ?
+if yes, there is a problem, since i sometimes use size inside locked code, 
+if i relock - there will be a problem (BAD !!)
