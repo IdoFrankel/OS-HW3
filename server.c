@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
             pthread_t t;
             pthread_create(&t, NULL, requestHandleWrapper, connfd);
         }
-        else if (size(waiting) < queueSize - size(running))
+        else if (size(waiting) < queueSize - threadsCount)
         {
             printf("ttid = %d |\t server.c 30\n", gettid());
             // waiting queue is not full

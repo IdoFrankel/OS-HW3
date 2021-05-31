@@ -3,3 +3,10 @@ notes
 should size be locked ?
 if yes, there is a problem, since i sometimes use size inside locked code, 
 if i relock - there will be a problem (BAD !!)
+
+
+---------------
+when new request arrives, should we lock the entry point, until the previous requests was placed inside a queue ?
+
+what happens if new requets arrives, than a woriking threads end,
+should we add the new request to running, or to waiting, and take one from waiting to running?
