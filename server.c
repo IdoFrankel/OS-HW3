@@ -44,7 +44,7 @@ void getargs(int *port, int *threads, int *queue_size, char **schedalg, int argc
 }
 
 #pragma region locs and conditions
-int threadsCount, queueSize;
+int maxWorkingThreads, queueSize;
 char *schedalg;
 
 struct queue *running;
@@ -57,113 +57,57 @@ pthread_cond_t running_insert_allow;
 pthread_cond_t waiting_insert_allow;
 
 pthread_cond_t running_delete_allow;
+// no sure if needed.
 pthread_cond_t waiting_delete_allow;
 
 #pragma endregion
 
-void requestHandleWrapper(int fd)
+void threadUnlockWrapper(pthread_mutex_t *lock)
 {
-
-    printf("ttid = %d |\t server.c 1\n", gettid());
-    requestHandle(fd);
-
-    printf("ttid = %d |\t server.c 2\n", gettid());
-
-    // dequeue element and send running_insert_allow signal.
-    int returnedFd = dequeueByFd(running, &running_m, &running_insert_allow, fd);
-
-    if (returnedFd != fd)
+    if (pthread_mutex_unlock(lock) != 0)
     {
-        printf(" *** BUG  ***");
-        printf("dequing from running queue returned diffrent socket to close.\n");
+        // ERROR while unlocking.
     }
-
-    printf("ttid = %d |\t server.c 3\n", gettid());
-
-    // close socket fd
-    Close(fd);
 }
 
-void requestWaitingHandleWrapper(int connfd)
+void threadLockWrapper(pthread_mutex_t *lock)
 {
-    // ============== QUESTION =====
-    // should lock the waiting queue ?
-    //  ==== END QUESTION ======
-
-    // waits until available work thread.
-    pthread_mutex_lock(&running_m);
-    while (size(running) == threadsCount)
+    if (pthread_mutex_lock(lock) != 0)
     {
-        pthread_cond_wait(&running_insert_allow, &running_m);
-        printf(" *** ");
+        // ERROR while locking.
     }
-    printf("empty space in running queue is available.\n");
+}
 
-    printf("waiting queue size : %d \n", size(waiting));
-    // dequeue waiting requests, and adds it to running queue.
+//deqeue **
+void WorkerThreadsHandler(int fd)
+{
+    printf("ttid = %d |\t server.c 20\n", gettid());
+    int val;
+    while (1)
+    {
+        threadLockWrapper(&running_m);
 
-    // pthread_mutex_lock(&waiting_m);
+        while (size(running) == 0)
+        {
+            // wait unntil the queue is not empty, and a request can be processed.
+            val = pthread_cond_wait(&running_delete_allow, &running_m);
+        }
 
-    /* DELETE THIS ?
-                // int fd = dequeue_noLock(waiting);
+        int fd = dequeue_noLock(running);
+        pthread_cond_signal(&running_insert_allow);
 
-                // // sends signal to notify empty space is available in waiting queue.
-                // printf("dequeue socket %d from waiting queue and enqueue to running queue\n", fd);
-                // pthread_cond_signal(&waiting_insert_allow);
-                // pthread_mutex_unlock(&waiting_m);
-    */
+        threadUnlockWrapper(&running_m);
 
-    // dequeue waiting requests, and adds it to running queue.
-    int fd = dequeue(waiting, &waiting_m, &waiting_insert_allow);
-
-    enqueue_noLock(running, fd);
-    pthread_mutex_unlock(&running_m);
-
-    // not sure if supose to be inside the previous lock.
-    pthread_t t;
-    pthread_create(&t, NULL, requestHandleWrapper, fd);
+        //process the request, and than close the connection.
+        requestHandle(fd);
+        Close(fd);
+    }
 }
 
 int main(int argc, char *argv[])
 {
     int listenfd, connfd, port, clientlen;
     struct sockaddr_in clientaddr;
-
-    // int threadsCount, queueSize;
-
-    getargs(&port, &threadsCount, &queueSize, &schedalg, argc, argv);
-
-    /* 
-        HW3: Create some threads...
-
-        create fix size pool for working threads.
-        each thread is blocked until there is a http request for it to handle
-        if (|worker threads| > |active requests |) some worker threads are blocked, waiting for new http requests
-        if (|requests| > |worker threads |) the request are buffred until there is a ready thread.
-
-        the master thread responsible for accepting new http connections, and placing the descriptor in the queue (size is input)
-        the master:
-            1. accept the connection
-            2. place the connection descriptor into the queue
-            3. return to accepting more conntections (letting the worker thread to handle the requests).
-    
-        a worker thread wakes when there is an http request in the queue. (should pick the oldest e.g the first)
-        worker thread:
-            1. preforms read on the nerwork descriptor
-            2. obtain the specified content (by either reading the static file or executing the cgi process)
-            3. returns the content to the client by writing to the descriptor
-            4. the worker thread then waits for another request
-
-        NOTE: the access to the shared buffer MUST be synchronized.
-            the master must hold and wait if the queue is full.
-            the worker thread must wait if the queue is empty.
-
-        HINT: seperate the queue into two:
-            1. queue 1 : requests waiting to be picked up by worker thread
-            2. queue 2 : requests currently handeled by some worker threads
-            make sure ther combined size <= sized specified in command line
-
-    */
 
 #pragma region initialize locs and conditions
 
@@ -181,44 +125,73 @@ int main(int argc, char *argv[])
 
 #pragma endregion
 
+    /*
+        Running quque size = maxWorkingThreads
+        queueSize = running + waiting queue
+        => waitingSize = queueSize - threads count
+    */
+    getargs(&port, &maxWorkingThreads, &queueSize, &schedalg, argc, argv);
+    printf("server.c socketFD =%d running =%d \t maxWorkingThreads =%d\n", connfd, size(running), maxWorkingThreads);
+    printf("ttid = %d |\t server.c 10\n", gettid());
+
+    int val;
+    // Create the worket threads poll
+    for (int i = 0; i < maxWorkingThreads; i++)
+    {
+        pthread_t t;
+        val = pthread_create(&t, NULL, WorkerThreadsHandler, connfd);
+        if (val)
+        {
+            // error while creating thread.
+        }
+    }
+
     listenfd = Open_listenfd(port);
     while (1)
     {
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *)&clientlen);
 
-        //
-        // HW3: In general, don't handle the request in the main thread.
-        // Save the relevant info in a buffer and have one of the worker threads
-        // do the work.
-        //
+        /*
+            lock both queues.
+            check if  running is fully ocupied.
+            if not - insert to running.
+            if yes - check if waiting is fully ocuupied.
+            if not - insert to waiting
+            if yes - ignore, and later do part 2
+        */
 
-        // TODO - should lock before size ???
+        // Q: should lock both, or just running now & waiting later.
+        // lock both queues.
+        threadLockWrapper(&running_m);
+        threadLockWrapper(&waiting_m);
 
-        printf("server.c socketFD =%d running =%d \t threadsCount =%d\n", connfd, size(running), threadsCount);
-        if (size(running) < threadsCount)
+        if (size(running) < maxWorkingThreads)
         {
-            printf("ttid = %d |\t server.c 20\n", gettid());
-
-            // consider moving inside the requestHandle BUT
-            // IF DO SO SEE LINE 116, in WAITING HANDLER WE ADD A REQUEST TO THE QUEUE, AND THEN CREATING THE THREAD
-            // SO WE WILL ENTER SAME FD TWICE PROBLEM !! TODO
-            enqueue(running, connfd, &running_m, &running_delete_allow);
-
-            pthread_t t;
-            pthread_create(&t, NULL, requestHandleWrapper, connfd);
+            // insert request to running queue.
+            enqueue_noLock(&running, connfd);
+            pthread_cond_signal(&running_delete_allow);
         }
-        else if (size(waiting) < queueSize - threadsCount)
+        else if (size(waiting) < queueSize - size(running))
         {
-            printf("ttid = %d |\t server.c 30\n", gettid());
-            // waiting queue is not full
-            AddRequestToWaitingQueue(connfd);
+            // insert requesut to waitng queue
+            enqueue_noLock(&waiting, connfd);
+            pthread_cond_signal(&waiting_delete_allow);
         }
         else
         {
-            printf("ttid = %d |\t server.c 50\n", gettid());
+            // handle the request according to part2.
+        }
 
-            if (strcasecmp(schedalg, "block"))
+        // unlock both queues in reversed order.
+        threadUnlockWrapper(&waiting_m);
+        threadUnlockWrapper(&running_m);
+    }
+}
+
+/*
+
+ if (strcasecmp(schedalg, "block"))
             {
                 OverloadHandling_Block(connfd);
             }
@@ -232,53 +205,10 @@ int main(int argc, char *argv[])
             else if (strcasecmp(schedalg, "random"))
             {
             }
-        }
-    }
-}
 
-void AddRequestToWaitingQueue(connfd)
-{
-    // should wait for signal from dequeuing of running (running_c)
 
-    // 1. lock waiting queue. and dequeue element.
-    // 2. lock running queue and enqueue element.
-    // 3. run the newly added element.
 
-    printf("ttid = %d |\t server.c 32\n", gettid());
-
-    enqueue(waiting, connfd, &waiting_m, &waiting_delete_allow);
-
-    pthread_t t;
-    pthread_create(&t, NULL, requestWaitingHandleWrapper, connfd);
-}
-
-#pragma region overload handling procedures
-
-void OverloadHandling_Block(int connfd)
-{
-    // ===== Hold and block new requests, until there is space in waiting queue.
-
-    pthread_mutex_lock(&waiting_m);
-
-    printf("ttid = %d |\t server.c 51\n", gettid());
-
-    while (size(waiting) + size(running) == queueSize)
-    {
-        // the cond_t is for dequeuing from waiting.
-        pthread_cond_wait(&waiting_m, &waiting_insert_allow);
-    }
-
-    printf("ttid = %d |\t server.c 52\n", gettid());
-
-    // enqueue to waiting without locking.
-    enqueue_noLock(waiting, connfd);
-    // signal  pthread_cond_signal(&waiting_delete_allow); ?
-
-    printf("ttid = %d |\t server.c 53\n", gettid());
-
-    pthread_mutex_unlock(&waiting_m);
-}
-
+            
 void OverloadHandling_DropTail(int connfd)
 {
     printf("ttid = %d |\t server.c 60 - close overload socket\n", gettid());
@@ -287,12 +217,7 @@ void OverloadHandling_DropTail(int connfd)
 
 void OverloadHandling_DropHead(int connfd)
 {
-    // DEQUEUE FROM WAITING.
-
-    // delete the thread itself, it is not enough just to remove from queue. ??
-
-    // ENQUEUE TO WAITING.
-    // AddRequestToWaitingQueue(connfd);
+    //TODO IMPLEMENT
 }
 
 void OverloadHandling_Random(int connfd)
@@ -300,4 +225,4 @@ void OverloadHandling_Random(int connfd)
     //TODO IMPLEMENT
 }
 
-#pragma endregion
+*/
