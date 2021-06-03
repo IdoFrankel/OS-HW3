@@ -8,5 +8,7 @@ int dequeue(struct queue *, pthread_mutex_t *, pthread_cond_t *);
 int dequeue_noLock(struct queue *);
 int dequeueByFd(struct queue *, pthread_mutex_t *, pthread_cond_t *, int);
 int size(struct queue *);
+void increaseSize(struct queue *);
+void decreaseSize(struct queue *);
 
 #endif
