@@ -43,6 +43,11 @@ void getargs(int *port, int *threads, int *queue_size, char **schedalg, int argc
     *schedalg = argv[4];
 }
 
+int min(int a, int b)
+{
+    return (a < b) ? a : b;
+}
+
 #pragma region locs and conditions
 int maxWorkingThreads, queue_size;
 char *schedalg;
@@ -60,8 +65,6 @@ pthread_cond_t running_delete_allow;
 // no sure if needed.
 pthread_cond_t waiting_delete_allow;
 
-#pragma endregion
-
 void threadUnlockWrapper(pthread_mutex_t *lock)
 {
     if (pthread_mutex_unlock(lock) != 0)
@@ -77,6 +80,74 @@ void threadLockWrapper(pthread_mutex_t *lock)
         // ERROR while locking.
     }
 }
+
+#pragma endregion
+
+#pragma region overload handling
+
+int OverloadHandling(char *schedalg, int connfd)
+{
+    if (strcasecmp(schedalg, "block"))
+    {
+        OverloadHandling_Block();
+        return 1;
+    }
+    else if (strcasecmp(schedalg, "dt"))
+    {
+        OverloadHandling_DropTail(connfd);
+        return 0;
+    }
+    else if (strcasecmp(schedalg, "dh"))
+    {
+        OverloadHandling_DropHead();
+        return 1;
+    }
+    else if (strcasecmp(schedalg, "random"))
+    {
+        return 1;
+    }
+    else
+    {
+        // **bug**
+    }
+}
+
+void OverloadHandling_Block()
+{
+    // if (maxSize(waiting)!=0 && size(waiting) == maxSize(waiting)) ||
+    //else (maxSize(waiting) == 0 && size(running) == maxSize(running))
+
+    threadLockWrapper(&waiting_m);
+
+    // BUG if maxSize(waiting) == 0 !!.
+    while (size(waiting) == maxSize(waiting))
+    {
+        pthread_cond_wait(&waiting_insert_allow, &waiting_m);
+    }
+
+    threadUnlockWrapper(&waiting_m);
+}
+
+void OverloadHandling_DropTail(int connfd)
+{
+    printf("ttid = %d |\t server.c 51 - drop socket\n", gettid());
+    Close(connfd);
+}
+
+void OverloadHandling_DropHead()
+{
+    threadLockWrapper(&waiting_m);
+    int connfd = dequeue_noLock(waiting);
+    threadUnlockWrapper(&waiting_m);
+    Close(connfd);
+}
+
+void OverloadHandling_Random()
+{
+    //TODO IMPLEMENT
+}
+
+#pragma endregion
 
 //deqeue **
 void WorkerThreadsHandler()
@@ -96,6 +167,7 @@ void WorkerThreadsHandler()
         connfd = dequeue_noLock(running);
         increaseSize(running);
         threadUnlockWrapper(&running_m);
+
         //process the request, and than close the connection.
         requestHandle(connfd);
         Close(connfd);
@@ -112,10 +184,12 @@ int main(int argc, char *argv[])
     int listenfd, connfd, port, clientlen;
     struct sockaddr_in clientaddr;
 
+    getargs(&port, &maxWorkingThreads, &queue_size, &schedalg, argc, argv);
+
 #pragma region initialize locs and conditions
 
-    running = createQueue();
-    waiting = createQueue();
+    running = createQueue(min(maxWorkingThreads, queue_size));
+    waiting = createQueue(queue_size - maxSize(running));
 
     pthread_mutex_init(&running_m, NULL);
     pthread_mutex_init(&waiting_m, NULL);
@@ -127,17 +201,9 @@ int main(int argc, char *argv[])
     pthread_cond_init(&waiting_delete_allow, NULL);
 
 #pragma endregion
-    /*
-        Running quque size = maxWorkingThreads
-        queue_size = running + waiting queue
-        => waitingSize = queue_size - threads count
-    */
 
-    getargs(&port, &maxWorkingThreads, &queue_size, &schedalg, argc, argv);
-    // printf("ttid = %d |\t server.c 10\n", gettid());
-
+#pragma region Worker thread poll initializing
     int val;
-    // Create the worket threads poll
     for (int i = 0; i < maxWorkingThreads; i++)
     {
         pthread_t t;
@@ -147,6 +213,7 @@ int main(int argc, char *argv[])
             // error while creating thread.
         }
     }
+#pragma endregion
 
     listenfd = Open_listenfd(port);
     while (1)
@@ -158,23 +225,27 @@ int main(int argc, char *argv[])
         threadLockWrapper(&waiting_m);
         threadLockWrapper(&running_m);
 
-        // BUG, SHOULD HAPPEND IF Queue_size <= threads ?
-        // what is the running queue size, and waiting queue size.
-
         printf("(1) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), size(running), queue_size);
 
         // should be size(running) but in dequeu o fritst dequeue, just later i run the the reques.
         //     // its a bug since i reduce the size of running, before it actuly done running.
-        if (size(waiting) + size(running) >= queue_size)
+        if (size(waiting) + size(running) == queue_size)
         {
-            // handle by part 2.
-            // handle by section 2.
-            printf("(55) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), size(running), queue_size);
+            printf("400\n");
 
-            threadUnlockWrapper(&running_m); //tmp
-            threadUnlockWrapper(&waiting_m); //temp
-            Close(connfd);
-            continue;
+            // handled by part 2.
+            threadUnlockWrapper(&waiting_m);
+            threadUnlockWrapper(&running_m);
+            if (OverloadHandling(schedalg, connfd) == 0)
+            {
+                // if drop tail, than we closed the previous connection and continue listening to new requests.
+                continue;
+            }
+            printf("300 ****BUG *****\n");
+        }
+        else if (size(waiting) + size(running) > queue_size)
+        {
+            printf("200 ****BUG *****");
         }
 
         threadUnlockWrapper(&running_m);
@@ -186,11 +257,10 @@ int main(int argc, char *argv[])
 
         threadUnlockWrapper(&waiting_m); // not sure
 
-        // not quite sure about the condition.
         threadLockWrapper(&running_m);
-        while (size(running) == maxWorkingThreads)
+        while (size(running) == maxSize(running))
         {
-            // wait unntil the queue is not empty, and a request can be processed.
+            // wait until the queue is not empty, and a request can be processed.
             pthread_cond_wait(&running_insert_allow, &running_m);
         }
 
@@ -198,52 +268,18 @@ int main(int argc, char *argv[])
 
         printf("(3) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), size(running), queue_size);
 
-        int temp = dequeue_noLock(waiting); //  dequeue socket from waiting
+        int temp = dequeue_noLock(waiting);         //  dequeue socket from waiting
+        pthread_cond_signal(&waiting_insert_allow); //  signal waiting_insert_allow.
 
-        printf("(4) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), size(running), queue_size);
+        // printf("(4) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), size(running), queue_size);
+        enqueue_noLock(running, temp); //  enqueue to running
+
+        printf("(5) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), size(running), queue_size);
 
         threadUnlockWrapper(&waiting_m);
 
-        enqueue_noLock(running, temp);              //  enqueue to running
+        // enqueue_noLock(running, temp);              //  enqueue to running - move to line 204
         pthread_cond_signal(&running_delete_allow); //  signal running_delete_allow.
         threadUnlockWrapper(&running_m);            // unlock running queue.
     }
 }
-
-/*
-
- if (strcasecmp(schedalg, "block"))
-            {
-                OverloadHandling_Block(connfd);
-            }
-            else if (strcasecmp(schedalg, "dt"))
-            {
-                OverloadHandling_DropTail(connfd);
-            }
-            else if (strcasecmp(schedalg, "sh"))
-            {
-            }
-            else if (strcasecmp(schedalg, "random"))
-            {
-            }
-
-
-
-            
-void OverloadHandling_DropTail(int connfd)
-{
-    printf("ttid = %d |\t server.c 60 - close overload socket\n", gettid());
-    Close(connfd);
-}
-
-void OverloadHandling_DropHead(int connfd)
-{
-    //TODO IMPLEMENT
-}
-
-void OverloadHandling_Random(int connfd)
-{
-    //TODO IMPLEMENT
-}
-
-*/

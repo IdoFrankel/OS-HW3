@@ -22,14 +22,15 @@ typedef struct node
 
 typedef struct queue
 {
-    int size;
+    int size, maxSize;
     node *front, *back;
 } queue;
 
-struct queue *createQueue()
+struct queue *createQueue(int maxSize)
 {
     struct queue *q = malloc(sizeof(struct queue));
     q->size = 0;
+    q->maxSize = maxSize;
     q->back = q->front = NULL;
     return q;
 }
@@ -187,12 +188,12 @@ int dequeueByFd(struct queue *q, pthread_mutex_t *m, pthread_cond_t *c, int fd)
 
 void increaseSize(struct queue *q)
 {
-    q->size++;
+    q->size = q->size + 1;
 }
 
 void decreaseSize(struct queue *q)
 {
-    q->size--;
+    q->size = q->size - 1;
 }
 
 // TODO shpould be locked?
@@ -202,4 +203,9 @@ int size(struct queue *q)
 {
     int size = q->size;
     return size;
+}
+
+int maxSize(struct queue *q)
+{
+    return q->maxSize;
 }
