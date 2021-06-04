@@ -85,33 +85,6 @@ void threadLockWrapper(pthread_mutex_t *lock)
 
 #pragma region overload handling
 
-int OverloadHandling(char *schedalg, int connfd)
-{
-    if (strcasecmp(schedalg, "block"))
-    {
-        OverloadHandling_Block();
-        return 1;
-    }
-    else if (strcasecmp(schedalg, "dt"))
-    {
-        OverloadHandling_DropTail(connfd);
-        return 0;
-    }
-    else if (strcasecmp(schedalg, "dh"))
-    {
-        OverloadHandling_DropHead();
-        return 1;
-    }
-    else if (strcasecmp(schedalg, "random"))
-    {
-        return 1;
-    }
-    else
-    {
-        // **bug**
-    }
-}
-
 void OverloadHandling_Block()
 {
     // if (maxSize(waiting)!=0 && size(waiting) == maxSize(waiting)) ||
@@ -145,6 +118,39 @@ void OverloadHandling_DropHead()
 void OverloadHandling_Random()
 {
     //TODO IMPLEMENT
+}
+
+int OverloadHandling(char *schedalg, int connfd)
+{
+    if (strcmp(schedalg, "block") == 0)
+    {
+        printf("block\n");
+        OverloadHandling_Block();
+        return 1;
+    }
+    else if (strcmp(schedalg, "dt") == 0)
+    {
+        printf("dt\n");
+        OverloadHandling_DropTail(connfd);
+        return 0;
+    }
+    else if (strcmp(schedalg, "dh") == 0)
+    {
+        printf("dh\n");
+        OverloadHandling_DropHead();
+        return 1;
+    }
+    else if (strcmp(schedalg, "random") == 0)
+    {
+        printf("random\n");
+        return 1;
+    }
+    else
+    {
+        printf("**bug**\n");
+        // **bug**
+        return 1;
+    }
 }
 
 #pragma endregion
