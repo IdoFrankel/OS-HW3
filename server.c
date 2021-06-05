@@ -166,7 +166,7 @@ void WorkerThreadsHandler()
 
         while (size(running) == 0)
         {
-            // wait unntil the queue is not empty, and a request can be processed.
+            // wait until the queue is not empty, and a request can be processed.
             pthread_cond_wait(&running_delete_allow, &running_m);
         }
 
@@ -228,8 +228,8 @@ int main(int argc, char *argv[])
         connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *)&clientlen);
 
         // Q: not sure if locking for so long is good.
-        threadLockWrapper(&waiting_m);
         threadLockWrapper(&running_m);
+        threadLockWrapper(&waiting_m);
 
         printf("(1) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), size(running), queue_size);
 
@@ -247,11 +247,12 @@ int main(int argc, char *argv[])
                 // if drop tail, than we closed the previous connection and continue listening to new requests.
                 continue;
             }
-            printf("300 ****BUG *****\n");
+            threadLockWrapper(&running_m);
+            threadLockWrapper(&waiting_m);
         }
         else if (size(waiting) + size(running) > queue_size)
         {
-            printf("200 ****BUG *****");
+            printf("200 ****BUG *****\n");
         }
 
         threadUnlockWrapper(&running_m);
@@ -261,9 +262,16 @@ int main(int argc, char *argv[])
 
         printf("(2) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), size(running), queue_size);
 
-        threadUnlockWrapper(&waiting_m); // not sure
+        threadUnlockWrapper(&waiting_m);
 
         threadLockWrapper(&running_m);
+
+        // **** BUG ***
+        // the bug is because of this while loop.
+        // when ./server 8003 1 2 dt
+        // first requests is queued to wating, and than dequing and to running queue.
+        // seconds request is queued to waiting. but waits until there is space in running queue, which blocks future requests.
+        // here  is the bug. what should we do here ???.
         while (size(running) == maxSize(running))
         {
             // wait until the queue is not empty, and a request can be processed.
