@@ -79,7 +79,10 @@ void threadLockWrapper(pthread_mutex_t *lock)
 
 void OverloadHandling_Block()
 {
-    // while (size(waiting) == maxSize(waiting))
+    // TODO - QUESTION
+    // check if the implementation is good.
+    // when blocking, if new requests came, should we ignore them, or
+    // process them at later stage ??
     while (size(waiting) + runningSize == queue_size)
     {
         pthread_cond_wait(&emptyWorkerThread, &lock);
@@ -97,6 +100,11 @@ void OverloadHandling_DropTail(int connfd)
 void OverloadHandling_DropHead()
 {
     // THERE IS A STRANGE BUG with drop head.
+
+    // pheraphs dequing when wating is empty ???
+    //there is a bug when dequig when waiting is empty.
+    //furthermore, if server 2 2 dh, than we cannot dequeu any request
+    // and cannot enque the new request because we eill exceed the queueSize.
 
     int connfd = dequeue_noLock(waiting);
     threadUnlockWrapper(&lock);
