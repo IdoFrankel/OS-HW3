@@ -89,11 +89,11 @@ void OverloadHandling_Block()
     }
 }
 
-void OverloadHandling_DropTail(int connfd)
+void OverloadHandling_DropTail(int conn)
 {
     printf("ttid = %d |\t server.c 51 - drop socket\n", gettid());
     threadUnlockWrapper(&lock);
-    Close(connfd);
+    Close(conn);
     threadLockWrapper(&lock);
 }
 
@@ -106,9 +106,11 @@ void OverloadHandling_DropHead()
     //furthermore, if server 2 2 dh, than we cannot dequeu any request
     // and cannot enque the new request because we eill exceed the queueSize.
 
-    int connfd = dequeue_noLock(waiting);
+    int tempConn = dequeue_noLock(waiting);
+    printf("removed connection %d from waiting queue \n", tempConn);
+
     threadUnlockWrapper(&lock);
-    Close(connfd);
+    Close(tempConn);
     threadLockWrapper(&lock);
 }
 
@@ -117,7 +119,7 @@ void OverloadHandling_Random()
     //TODO IMPLEMENT
 }
 
-void OverloadHandling(char *schedalg, int connfd)
+void OverloadHandling(char *schedalg, int conn)
 {
     if (strcmp(schedalg, "block") == 0)
     {
@@ -125,7 +127,7 @@ void OverloadHandling(char *schedalg, int connfd)
     }
     else if (strcmp(schedalg, "dt") == 0)
     {
-        OverloadHandling_DropTail(connfd);
+        OverloadHandling_DropTail(conn);
     }
     else if (strcmp(schedalg, "dh") == 0)
     {
@@ -158,14 +160,23 @@ void WorkerThreadsHandler()
             pthread_cond_wait(&emptyWorkerThread, &lock);
         }
 
+        if (size(waiting) == 0)
+        {
+            printf("size(waiting) == 0 ** BUG **\n");
+        }
+
         connfd = dequeue_noLock(waiting);
         runningSize += 1;
 
         threadUnlockWrapper(&lock);
 
         //process the request, and than close the connection.
+        printf("process connfd=%d\n", connfd);
+        // the bug happens here.
         requestHandle(connfd);
+        printf("close connfd=%d\n", connfd);
         Close(connfd);
+        printf("done closing connfd=%d\n", connfd);
 
         threadLockWrapper(&lock);
         runningSize -= 1;
@@ -217,6 +228,14 @@ int main(int argc, char *argv[])
 
         if (size(waiting) + runningSize == queue_size)
         {
+            // if drop-head, but the waiting queue is empty, should ignore the new request.
+            if (size(waiting) == 0 && (strcmp(schedalg, "dh") == 0))
+            {
+                threadUnlockWrapper(&lock);
+                Close(connfd);
+                continue;
+            }
+
             // handled by part 2.
             OverloadHandling(schedalg, connfd);
             if (strcmp(schedalg, "dt") == 0)
@@ -231,6 +250,7 @@ int main(int argc, char *argv[])
             printf("200 ****BUG *****\n");
         }
 
+        printf("add connection %d to waiting queue \n", connfd);
         // add request to waiting queue.
         enqueue_noLock(waiting, connfd);
 
