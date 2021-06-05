@@ -217,6 +217,14 @@ int main(int argc, char *argv[])
 
         if (size(waiting) + runningSize == queue_size)
         {
+            // if drop-head, but the waiting queue is empty, should ignore the new request.
+            if (size(waiting) == 0 && strcmp(schedalg, "dh") == 0)
+            {
+                threadUnlockWrapper(&lock);
+                Close(connfd);
+                continue;
+            }
+
             // handled by part 2.
             OverloadHandling(schedalg, connfd);
             if (strcmp(schedalg, "dt") == 0)
