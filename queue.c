@@ -88,9 +88,52 @@ int dequeue_noLock(struct queue *q)
     return data;
 }
 
-// TODO shpould be locked?
-// IF YES, THERE IS A PROBLEM, SINCE THERE ARE CALSL TO SIZE WITHIN LOCKS
-// IN THAT CASE, RE LOCK WILL CAUSE ERROR, PROBLEM !!
+int dequeueByFd(struct queue *q, int fd)
+{
+    // printf("ttid = %d |\t queue.c 17\n", gettid());
+
+    struct node *n = q->front;
+    while (n->next != NULL && n->data != fd)
+    {
+        n = n->next;
+    }
+
+    if (n->next == NULL && n->data != fd)
+    {
+        // IF you have reached here, there is a *** BUG ***
+        char content[MAXBUF];
+        //sprintf(content, "%s %d wasnt inside the queue\n", content, fd);
+        app_error(content);
+        return -1;
+    }
+    else
+    {
+        // remove n
+        if (q->front == n)
+        {
+            q->front = n->next;
+        }
+        if (q->back == n)
+        {
+            q->back = n->prev;
+        }
+
+        if (n->next != NULL)
+        {
+            n->next->prev = n->prev;
+        }
+        if (n->prev != NULL)
+        {
+            n->prev->next = n->next;
+        }
+
+        q->size -= 1;
+        int returnedFd = n->data;
+        free(n);
+        return returnedFd;
+    }
+}
+
 int size(struct queue *q)
 {
     int size = q->size;

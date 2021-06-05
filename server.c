@@ -79,28 +79,29 @@ void threadLockWrapper(pthread_mutex_t *lock)
 
 void OverloadHandling_Block()
 {
-    threadLockWrapper(&lock);
-
-    while (size(waiting) == maxSize(waiting))
+    // while (size(waiting) == maxSize(waiting))
+    while (size(waiting) + runningSize == queue_size)
     {
         pthread_cond_wait(&emptyWorkerThread, &lock);
     }
-
-    threadUnlockWrapper(&lock);
 }
 
 void OverloadHandling_DropTail(int connfd)
 {
     printf("ttid = %d |\t server.c 51 - drop socket\n", gettid());
+    threadUnlockWrapper(&lock);
     Close(connfd);
+    threadLockWrapper(&lock);
 }
 
 void OverloadHandling_DropHead()
 {
-    threadLockWrapper(&lock);
+    // THERE IS A STRANGE BUG with drop head.
+
     int connfd = dequeue_noLock(waiting);
     threadUnlockWrapper(&lock);
     Close(connfd);
+    threadLockWrapper(&lock);
 }
 
 void OverloadHandling_Random()
@@ -112,17 +113,14 @@ void OverloadHandling(char *schedalg, int connfd)
 {
     if (strcmp(schedalg, "block") == 0)
     {
-        printf("block\n");
         OverloadHandling_Block();
     }
     else if (strcmp(schedalg, "dt") == 0)
     {
-        printf("dt\n");
         OverloadHandling_DropTail(connfd);
     }
     else if (strcmp(schedalg, "dh") == 0)
     {
-        printf("dh\n");
         OverloadHandling_DropHead();
     }
     else if (strcmp(schedalg, "random") == 0)
@@ -212,14 +210,13 @@ int main(int argc, char *argv[])
         if (size(waiting) + runningSize == queue_size)
         {
             // handled by part 2.
-            threadUnlockWrapper(&lock);
             OverloadHandling(schedalg, connfd);
             if (strcmp(schedalg, "dt") == 0)
             {
                 // if drop tail, than we closed the previous connection and continue listening to new requests.
+                threadUnlockWrapper(&lock);
                 continue;
             }
-            threadLockWrapper(&lock);
         }
         else if (size(waiting) + runningSize > queue_size)
         {
@@ -229,7 +226,7 @@ int main(int argc, char *argv[])
         // add request to waiting queue.
         enqueue_noLock(waiting, connfd);
 
-        // Signal that if there is an empty worker-thread, than there is a waiting request for it.
+        // Signal any unemployed worker-thread can wake-up.
         pthread_cond_signal(&emptyWorkerThread);
 
         printf("(2) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
