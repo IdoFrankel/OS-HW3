@@ -61,23 +61,6 @@ void enqueue_noLock(struct queue *q, int data)
     //printf("ttid = %d |\t queue.c 6\n", gettid());
 }
 
-void enqueue(struct queue *q, int data, pthread_mutex_t *m, pthread_cond_t *c)
-{
-    //printf("ttid = %d |\t queue.c 1\n", gettid());
-    pthread_mutex_lock(m);
-
-    //printf("ttid = %d |\t queue.c 2\n", gettid());
-    enqueue_noLock(q, data);
-
-    // printf("ttid = %d |\t queue.c 7\n", gettid());
-
-    pthread_cond_signal(c);
-
-    // printf("ttid = %d |\t queue.c 8\n", gettid());
-
-    pthread_mutex_unlock(m);
-}
-
 int dequeue_noLock(struct queue *q)
 {
     //printf("ttid = %d |\t queue.c 12\n", gettid());
@@ -103,97 +86,6 @@ int dequeue_noLock(struct queue *q)
     //printf("ttid = %d |\t queue.c 12.5\n", gettid());
 
     return data;
-}
-
-int dequeue(struct queue *q, pthread_mutex_t *m, pthread_cond_t *c)
-{
-    //printf("ttid = %d |\t queue.c 9\n", gettid());
-    pthread_mutex_lock(m);
-    //printf("ttid = %d |\t queue.c 10\n", gettid());
-
-    while (q->size == 0)
-    {
-        //printf("ttid = %d |\t queue.c 11\n", gettid());
-        pthread_cond_wait(c, m);
-    }
-
-    int data = dequeue_noLock(q);
-    // printf("ttid = %d |\t queue.c 13\n", gettid());
-
-    pthread_cond_signal(c);
-
-    // printf("ttid = %d |\t queue.c 14\n", gettid());
-
-    pthread_mutex_unlock(m);
-
-    //printf("ttid = %d |\t queue.c 16\n", gettid());
-
-    return data;
-}
-
-int dequeueByFd(struct queue *q, pthread_mutex_t *m, pthread_cond_t *c, int fd)
-{
-    // printf("ttid = %d |\t queue.c 17\n", gettid());
-    pthread_mutex_lock(m);
-    //printf("ttid = %d |\t queue.c 18\n", gettid());
-
-    struct node *n = q->front;
-    while (n->next != NULL && n->data != fd)
-    {
-        n = n->next;
-    }
-
-    if (n->next == NULL && n->data != fd)
-    {
-        char content[MAXBUF];
-        // *** BUG ***
-        //printf("BUGGGGG");
-        //sprintf(content, "%s %d wasnt inside the queue\n", content, fd);
-        app_error(content);
-        return -1;
-    }
-    else
-    {
-        // remove n
-        if (q->front == n)
-        {
-            q->front = n->next;
-        }
-        if (q->back == n)
-        {
-            q->back = n->prev;
-        }
-
-        if (n->next != NULL)
-        {
-            n->next->prev = n->prev;
-        }
-        if (n->prev != NULL)
-        {
-            n->prev->next = n->next;
-        }
-
-        //printf("signal running_insert_allow\n");
-        q->size -= 1;
-
-        pthread_cond_signal(c);
-        int returnedFd = n->data;
-
-        pthread_mutex_unlock(m);
-
-        free(n);
-        return returnedFd;
-    }
-}
-
-void increaseSize(struct queue *q)
-{
-    q->size = q->size + 1;
-}
-
-void decreaseSize(struct queue *q)
-{
-    q->size = q->size - 1;
 }
 
 // TODO shpould be locked?
