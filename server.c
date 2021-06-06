@@ -99,16 +99,7 @@ void OverloadHandling_DropTail(int conn)
 
 void OverloadHandling_DropHead()
 {
-    // THERE IS A STRANGE BUG with drop head.
-
-    // pheraphs dequing when wating is empty ???
-    //there is a bug when dequig when waiting is empty.
-    //furthermore, if server 2 2 dh, than we cannot dequeu any request
-    // and cannot enque the new request because we eill exceed the queueSize.
-
     int tempConn = dequeue_noLock(waiting);
-    //printf("removed connection %d from waiting queue \n", tempConn);
-
     threadUnlockWrapper(&lock);
     Close(tempConn);
     threadLockWrapper(&lock);
@@ -135,12 +126,12 @@ void OverloadHandling(char *schedalg, int conn)
     }
     else if (strcmp(schedalg, "random") == 0)
     {
-        // todo implement.
+        // TODO IMPLEMENT.
     }
     else
     {
-        //printf("**bug**\n");
-        // **bug**
+        // if you have reached here, there is a bug.
+        exit(1);
     }
 }
 
@@ -162,6 +153,7 @@ void WorkerThreadsHandler()
 
         if (size(waiting) == 0)
         {
+            // If reached here,
             //printf("size(waiting) == 0 ** BUG **\n");
         }
 
@@ -214,6 +206,7 @@ int main(int argc, char *argv[])
         val = pthread_create(&t, NULL, WorkerThreadsHandler, i);
         if (val)
         {
+            exit(1);
             // error while creating thread.
         }
     }
