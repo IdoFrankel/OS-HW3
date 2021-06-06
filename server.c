@@ -34,7 +34,7 @@ void getargs(int *port, int *threads, int *queue_size, char **schedalg, int argc
 {
     if (argc < 4)
     {
-        fprintf(stderr, "Usage: %s <port> <threads> <queue_size> <schedalg>\n", argv[0]);
+        //fprintf(stderr, "Usage: %s <port> <threads> <queue_size> <schedalg>\n", argv[0]);
         exit(1);
     }
     *port = atoi(argv[1]);
@@ -91,7 +91,7 @@ void OverloadHandling_Block()
 
 void OverloadHandling_DropTail(int conn)
 {
-    printf("ttid = %d |\t server.c 51 - drop socket\n", gettid());
+    //printf("ttid = %d |\t server.c 51 - drop socket\n", gettid());
     threadUnlockWrapper(&lock);
     Close(conn);
     threadLockWrapper(&lock);
@@ -99,16 +99,7 @@ void OverloadHandling_DropTail(int conn)
 
 void OverloadHandling_DropHead()
 {
-    // THERE IS A STRANGE BUG with drop head.
-
-    // pheraphs dequing when wating is empty ???
-    //there is a bug when dequig when waiting is empty.
-    //furthermore, if server 2 2 dh, than we cannot dequeu any request
-    // and cannot enque the new request because we eill exceed the queueSize.
-
     int tempConn = dequeue_noLock(waiting);
-    printf("removed connection %d from waiting queue \n", tempConn);
-
     threadUnlockWrapper(&lock);
     Close(tempConn);
     threadLockWrapper(&lock);
@@ -135,12 +126,12 @@ void OverloadHandling(char *schedalg, int conn)
     }
     else if (strcmp(schedalg, "random") == 0)
     {
-        printf("random\n");
+        // TODO IMPLEMENT.
     }
     else
     {
-        printf("**bug**\n");
-        // **bug**
+        // if you have reached here, there is a bug.
+        exit(1);
     }
 }
 
@@ -149,7 +140,7 @@ void OverloadHandling(char *schedalg, int conn)
 //deqeue **
 void WorkerThreadsHandler()
 {
-    // printf("ttid = %d |\t server.c 20\n", gettid());
+    // //printf("ttid = %d |\t server.c 20\n", gettid());
     int connfd;
     while (1)
     {
@@ -162,7 +153,8 @@ void WorkerThreadsHandler()
 
         if (size(waiting) == 0)
         {
-            printf("size(waiting) == 0 ** BUG **\n");
+            // If reached here,
+            //printf("size(waiting) == 0 ** BUG **\n");
         }
 
         connfd = dequeue_noLock(waiting);
@@ -170,13 +162,16 @@ void WorkerThreadsHandler()
 
         threadUnlockWrapper(&lock);
 
+        //printf("process connfd=%d\n", connfd);
+
         //process the request, and than close the connection.
-        printf("process connfd=%d\n", connfd);
-        // the bug happens here.
         requestHandle(connfd);
-        printf("close connfd=%d\n", connfd);
+
+        //printf("close connfd=%d\n", connfd);
+
         Close(connfd);
-        printf("done closing connfd=%d\n", connfd);
+
+        //printf("done closing connfd=%d\n", connfd);
 
         threadLockWrapper(&lock);
         runningSize -= 1;
@@ -211,6 +206,7 @@ int main(int argc, char *argv[])
         val = pthread_create(&t, NULL, WorkerThreadsHandler, i);
         if (val)
         {
+            exit(1);
             // error while creating thread.
         }
     }
@@ -224,7 +220,7 @@ int main(int argc, char *argv[])
 
         threadLockWrapper(&lock);
 
-        printf("(1) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
+        //printf("(1) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
 
         if (size(waiting) + runningSize == queue_size)
         {
@@ -247,17 +243,18 @@ int main(int argc, char *argv[])
         }
         else if (size(waiting) + runningSize > queue_size)
         {
-            printf("200 ****BUG *****\n");
+            //printf("200 ****BUG *****\n");
         }
 
-        printf("add connection %d to waiting queue \n", connfd);
+        //printf("add connection %d to waiting queue \n", connfd);
+
         // add request to waiting queue.
         enqueue_noLock(waiting, connfd);
 
         // Signal any unemployed worker-thread can wake-up.
         pthread_cond_signal(&emptyWorkerThread);
 
-        printf("(2) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
+        //printf("(2) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
 
         threadUnlockWrapper(&lock);
     }
