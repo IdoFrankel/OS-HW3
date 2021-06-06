@@ -73,11 +73,17 @@ int dequeue_noLock(struct queue *q)
     {
         q->front->prev = NULL;
     }
+    else
+    {
+        //meaning the old_head was both front and back node of the queue.
+        q->back = NULL;
+    }
 
     //printf("ttid = %d |\t queue.c 12.2\n", gettid());
     q->size -= 1;
     //printf("ttid = %d |\t queue.c 12.3\n", gettid());
 
+    old_head->next = NULL;
     int data = old_head->data;
     //printf("ttid = %d |\t queue.c 12.4\n", gettid());
 
