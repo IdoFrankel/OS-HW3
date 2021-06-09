@@ -1,9 +1,12 @@
 #include "segel.h"
 #include "request.h"
 #include "queue.h"
+#include "statts.h"
 
 #include <unistd.h>
 #include <sys/syscall.h>
+
+#define MICRO_TO_MILLi 1000
 
 // TODO remove this when submiting.
 #include <unistd.h>
@@ -47,6 +50,12 @@ int min(int a, int b)
 {
     return (a < b) ? a : b;
 }
+
+#pragma region global statts
+struct statts** statts_arr;
+//struct timeval current_time;
+#pragma endregion
+
 
 #pragma region locs and conditions
 int maxWorkingThreads, queue_size, runningSize, maxRunningSize;
@@ -99,7 +108,7 @@ void OverloadHandling_DropTail(int conn)
 
 void OverloadHandling_DropHead()
 {
-    int tempConn = dequeue_noLock(waiting);
+    int tempConn = dequeue_noLock(waiting,NULL);
     threadUnlockWrapper(&lock);
     Close(tempConn);
     threadLockWrapper(&lock);
@@ -138,7 +147,7 @@ void OverloadHandling(char *schedalg, int conn)
 #pragma endregion
 
 //deqeue **
-void WorkerThreadsHandler()
+void WorkerThreadsHandler(void *statts_i)
 {
     // //printf("ttid = %d |\t server.c 20\n", gettid());
     int connfd;
@@ -156,8 +165,14 @@ void WorkerThreadsHandler()
             // If reached here,
             //printf("size(waiting) == 0 ** BUG **\n");
         }
-
-        connfd = dequeue_noLock(waiting);
+        
+        struct timeval current_time;
+        unsigned long time_in_ms;
+        connfd = dequeue_noLock(waiting,&time_in_ms);
+        gettimeofday(&current_time, NULL);
+        setArrivelTime((struct statts*)statts_i,time_in_ms);
+        time_in_ms = current_time.tv_usec * MICRO_TO_MILLi - time_in_ms;
+        setDispatchTime((struct statts*)statts_i,time_in_ms);
         runningSize += 1;
 
         threadUnlockWrapper(&lock);
@@ -165,7 +180,7 @@ void WorkerThreadsHandler()
         //printf("process connfd=%d\n", connfd);
 
         //process the request, and than close the connection.
-        requestHandle(connfd);
+        requestHandle(connfd, (struct statts*)statts_i);
 
         //printf("close connfd=%d\n", connfd);
 
@@ -200,10 +215,12 @@ int main(int argc, char *argv[])
 
 #pragma region Worker thread poll initializing
     int val;
+    statts_arr = malloc(sizeof(*statts_arr)*maxWorkingThreads);
     for (int i = 0; i < maxWorkingThreads; i++)
     {
         pthread_t t;
-        val = pthread_create(&t, NULL, WorkerThreadsHandler, i);
+        statts_arr[i] = createStatts(i);
+        val = pthread_create(&t, NULL, WorkerThreadsHandler, statts_arr[i]);
         if (val)
         {
             exit(1);
@@ -215,8 +232,12 @@ int main(int argc, char *argv[])
     listenfd = Open_listenfd(port);
     while (1)
     {
+        struct timeval current_time;
+        unsigned long time_in_ms;
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *)&clientlen);
+        gettimeofday(&current_time, NULL);
+        time_in_ms = current_time.tv_usec * MICRO_TO_MILLi;
 
         threadLockWrapper(&lock);
 
@@ -249,7 +270,7 @@ int main(int argc, char *argv[])
         //printf("add connection %d to waiting queue \n", connfd);
 
         // add request to waiting queue.
-        enqueue_noLock(waiting, connfd);
+        enqueue_noLock(waiting, connfd, time_in_ms);
 
         // Signal any unemployed worker-thread can wake-up.
         pthread_cond_signal(&emptyWorkerThread);

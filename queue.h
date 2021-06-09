@@ -2,8 +2,8 @@
 
 struct queue *createQueue(int maxSize);
 
-void enqueue_noLock(struct queue *, int);
-int dequeue_noLock(struct queue *);
+void enqueue_noLock(struct queue *, int, unsigned long);
+int dequeue_noLock(struct queue *,unsigned long* arrivel);
 int dequeueByFd(struct queue *, int);
 
 int size(struct queue *);
