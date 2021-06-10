@@ -1,12 +1,12 @@
 #include "segel.h"
 #include "request.h"
 #include "queue.h"
-#include "statts.h"
+#include "stats.h"
 
 #include <unistd.h>
 #include <sys/syscall.h>
 
-#define MICRO_TO_MILLi 1000
+#define TO_MILLi 1000
 
 // TODO remove this when submiting.
 #include <unistd.h>
@@ -51,8 +51,8 @@ int min(int a, int b)
     return (a < b) ? a : b;
 }
 
-#pragma region global statts
-struct statts** statts_arr;
+#pragma region global stats
+struct stats** stats_arr;
 //struct timeval current_time;
 #pragma endregion
 
@@ -147,7 +147,7 @@ void OverloadHandling(char *schedalg, int conn)
 #pragma endregion
 
 //deqeue **
-void WorkerThreadsHandler(void *statts_i)
+void WorkerThreadsHandler(void *stats_i)
 {
     // //printf("ttid = %d |\t server.c 20\n", gettid());
     int connfd;
@@ -167,12 +167,12 @@ void WorkerThreadsHandler(void *statts_i)
         }
         
         struct timeval current_time;
-        unsigned long time_in_ms;
+        unsigned long int time_in_ms;
         connfd = dequeue_noLock(waiting,&time_in_ms);
         gettimeofday(&current_time, NULL);
-        setArrivelTime((struct statts*)statts_i,time_in_ms);
-        time_in_ms = current_time.tv_usec * MICRO_TO_MILLi - time_in_ms;
-        setDispatchTime((struct statts*)statts_i,time_in_ms);
+        setArrivelTime((struct stats*)stats_i,time_in_ms);
+        time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi- time_in_ms;
+        setDispatchTime((struct stats*)stats_i,time_in_ms);
         runningSize += 1;
 
         threadUnlockWrapper(&lock);
@@ -180,7 +180,7 @@ void WorkerThreadsHandler(void *statts_i)
         //printf("process connfd=%d\n", connfd);
 
         //process the request, and than close the connection.
-        requestHandle(connfd, (struct statts*)statts_i);
+        requestHandle(connfd, (struct stats*)stats_i);
 
         //printf("close connfd=%d\n", connfd);
 
@@ -215,12 +215,12 @@ int main(int argc, char *argv[])
 
 #pragma region Worker thread poll initializing
     int val;
-    statts_arr = malloc(sizeof(*statts_arr)*maxWorkingThreads);
+    stats_arr = malloc(sizeof(*stats_arr)*maxWorkingThreads);
     for (int i = 0; i < maxWorkingThreads; i++)
     {
         pthread_t t;
-        statts_arr[i] = createStatts(i);
-        val = pthread_create(&t, NULL, WorkerThreadsHandler, statts_arr[i]);
+        stats_arr[i] = createstats(i);
+        val = pthread_create(&t, NULL, WorkerThreadsHandler, stats_arr[i]);
         if (val)
         {
             exit(1);
@@ -233,11 +233,13 @@ int main(int argc, char *argv[])
     while (1)
     {
         struct timeval current_time;
-        unsigned long time_in_ms;
+        unsigned long int time_in_ms;
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *)&clientlen);
         gettimeofday(&current_time, NULL);
-        time_in_ms = current_time.tv_usec * MICRO_TO_MILLi;
+        time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi;
+        //printf("current time in seconds = %lu\n" , current_time.tv_sec);
+        //printf("current time in micro seconds = %lu\n" , current_time.tv_usec);
 
         threadLockWrapper(&lock);
 
