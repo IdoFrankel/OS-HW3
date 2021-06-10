@@ -74,29 +74,56 @@ void clientPrint(int fd)
   }
 }
 
-int main(int argc, char *argv[])
+int main()
 {
-  char *host, *filename;
-  int port;
-  int clientfd;
-
-  if (argc != 4)
-  {
-    fprintf(stderr, "Usage: %s <host> <port> <filename>\n", argv[0]);
-    exit(1);
-  }
-
-  host = argv[1];
-  port = atoi(argv[2]);
-  filename = argv[3];
 
   /* Open a single connection to the specified host and port */
-  clientfd = Open_clientfd(host, port);
+  int num = 20;
+  pid_t arr[num];
+  pid_t pid;
+  for (int i = 0; i < num; i++)
+  {
+    pid = Fork();
+    if (pid == 0)
+    {
+      char *host = "localhost";
+      int port = 8003;
+      int clientfd;
+      char filename[20];
+      if (i % 2 == 0)
+      {
+        strcpy(filename, "home.html");
+      }
+      else
+      {
+        strcpy(filename, "output.cgi");
+      }
+      if (i == 18)
+      {
+        strcpy(filename, "home.htm");
+      }
+      if (i == 19)
+      {
+        strcpy(filename, "output.cg");
+      }
+      clientfd = Open_clientfd(host, port);
+      clientSend(clientfd, filename);
+      clientPrint(clientfd);
+      Close(clientfd);
+      exit(0);
+    }
+    else
+    {
+      arr[i] = pid;
+    }
+  }
 
-  clientSend(clientfd, filename);
-  clientPrint(clientfd);
-
-  Close(clientfd);
+  for (int i = 0; i < num; i++)
+  {
+    waitpid(arr[i], NULL, 0);
+    printf("got fork number %d\n", i);
+  }
+  printf("client finished \n");
 
   exit(0);
 }
