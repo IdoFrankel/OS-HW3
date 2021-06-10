@@ -7,6 +7,7 @@
 #include <sys/syscall.h>
 
 #define TO_MILLi 1000
+#define QUARTER(num) 0.25*num
 
 // TODO remove this when submiting.
 #include <unistd.h>
@@ -117,6 +118,15 @@ void OverloadHandling_DropHead()
 void OverloadHandling_Random()
 {
     //TODO IMPLEMENT
+    int drop_count = my_ceil(QUARTER(size(waiting)));
+    while(drop_count != 0){
+        // random numbers between 1 to drop_count
+        int drop = (rand() % drop_count) + 1;
+        int drop_fd = dequeueByOrder(waiting,drop);
+        close(drop_fd);
+        drop_count--;
+    }
+    return;
 }
 
 void OverloadHandling(char *schedalg, int conn)
@@ -136,6 +146,7 @@ void OverloadHandling(char *schedalg, int conn)
     else if (strcmp(schedalg, "random") == 0)
     {
         // TODO IMPLEMENT.
+        OverloadHandling_Random();
     }
     else
     {
@@ -248,7 +259,7 @@ int main(int argc, char *argv[])
         if (size(waiting) + runningSize == queue_size)
         {
             // if drop-head, but the waiting queue is empty, should ignore the new request.
-            if (size(waiting) == 0 && (strcmp(schedalg, "dh") == 0))
+            if (size(waiting) == 0 && ((strcmp(schedalg, "dh") == 0) ||(strcmp(schedalg, "random") == 0)) )
             {
                 threadUnlockWrapper(&lock);
                 Close(connfd);

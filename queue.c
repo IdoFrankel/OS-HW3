@@ -156,3 +156,19 @@ int maxSize(struct queue *q)
 {
     return q->maxSize;
 }
+
+int dequeueByOrder(struct queue *q, int index){
+    struct node* pos = q->front;
+    int i = 1;
+    while(i != index){
+        i++;
+        pos = pos->next;
+    }
+    (pos->prev)->next = pos->next;
+    (pos->next)->prev = pos->prev;
+    int result = pos->data;
+    pos->next = NULL;
+    pos->prev = NULL;
+    free(pos);
+    return result;
+}

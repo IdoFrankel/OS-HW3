@@ -121,4 +121,7 @@ int open_listenfd(int portno);
 int Open_clientfd(char *hostname, int port);
 int Open_listenfd(int port); 
 
+/* Auxiliary fnctions */
+int my_ceil(float num);
+
 #endif /* __CSAPP_H__ */

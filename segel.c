@@ -557,4 +557,12 @@ int Open_listenfd(int port)
     return rc;
 }
 
+int my_ceil(float num) {
+    int inum = (int)num;
+    if (num == (float)inum) {
+        return inum;
+    }
+    return inum + 1;
+}
+
 
