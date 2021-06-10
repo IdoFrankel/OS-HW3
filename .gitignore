@@ -50,3 +50,10 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+client
+output.cgi
+server
+public/favicon.ico
+public/home.html
+public/output.cgi
+.vscode/settings.json
