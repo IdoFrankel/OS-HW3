@@ -79,10 +79,6 @@ void threadLockWrapper(pthread_mutex_t *lock)
 
 void OverloadHandling_Block()
 {
-    // TODO - QUESTION
-    // check if the implementation is good.
-    // when blocking, if new requests came, should we ignore them, or
-    // process them at later stage ??
     while (size(waiting) + runningSize == queue_size)
     {
         pthread_cond_wait(&emptyWorkerThread, &lock);
@@ -196,6 +192,7 @@ int main(int argc, char *argv[])
     pthread_mutex_init(&lock, NULL);
     pthread_cond_init(&emptyWorkerThread, NULL);
 
+    int maxSignalsCounter = 0;
 #pragma endregion
 
 #pragma region Worker thread poll initializing
@@ -251,8 +248,14 @@ int main(int argc, char *argv[])
         // add request to waiting queue.
         enqueue_noLock(waiting, connfd);
 
-        // Signal any unemployed worker-thread can wake-up.
-        pthread_cond_signal(&emptyWorkerThread);
+        // should signal in main to only maxRunningSize threads,
+        // any additional thread should be waked up when other requests is done.
+        if (maxSignalsCounter < maxRunningSize)
+        {
+            // Signal any unemployed worker-thread can wake-up.
+            pthread_cond_signal(&emptyWorkerThread);
+            maxSignalsCounter++;
+        }
 
         //printf("(2) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
 
