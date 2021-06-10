@@ -5,18 +5,6 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 
-// TODO remove this when submiting.
-#include <unistd.h>
-#include <sys/syscall.h>
-
-#ifndef SYS_gettid
-#error "SYS_gettid unavailable on this system"
-#endif
-
-#define gettid() ((pid_t)syscall(SYS_gettid))
-
-// TODO remove above when submitting
-
 //
 // server.c: A very, very simple web server
 //
@@ -34,7 +22,7 @@ void getargs(int *port, int *threads, int *queue_size, char **schedalg, int argc
 {
     if (argc < 4)
     {
-        //fprintf(stderr, "Usage: %s <port> <threads> <queue_size> <schedalg>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <port> <threads> <queue_size> <schedalg>\n", argv[0]);
         exit(1);
     }
     *port = atoi(argv[1]);
@@ -87,7 +75,6 @@ void OverloadHandling_Block()
 
 void OverloadHandling_DropTail(int conn)
 {
-    //printf("ttid = %d |\t server.c 51 - drop socket\n", gettid());
     threadUnlockWrapper(&lock);
     Close(conn);
     threadLockWrapper(&lock);
@@ -136,7 +123,6 @@ void OverloadHandling(char *schedalg, int conn)
 //deqeue **
 void WorkerThreadsHandler()
 {
-    // //printf("ttid = %d |\t server.c 20\n", gettid());
     int connfd;
     while (1)
     {
@@ -149,8 +135,7 @@ void WorkerThreadsHandler()
 
         if (size(waiting) == 0)
         {
-            // If reached here,
-            //printf("size(waiting) == 0 ** BUG **\n");
+            // If reached here, there is a bug.
         }
 
         connfd = dequeue_noLock(waiting);
@@ -158,16 +143,10 @@ void WorkerThreadsHandler()
 
         threadUnlockWrapper(&lock);
 
-        //printf("process connfd=%d\n", connfd);
-
         //process the request, and than close the connection.
         requestHandle(connfd);
 
-        //printf("close connfd=%d\n", connfd);
-
         Close(connfd);
-
-        //printf("done closing connfd=%d\n", connfd);
 
         threadLockWrapper(&lock);
         runningSize -= 1;
@@ -217,8 +196,6 @@ int main(int argc, char *argv[])
 
         threadLockWrapper(&lock);
 
-        //printf("(1) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
-
         if (size(waiting) + runningSize == queue_size)
         {
             // if drop-head, but the waiting queue is empty, should ignore the new request.
@@ -243,8 +220,6 @@ int main(int argc, char *argv[])
             //printf("200 ****BUG *****\n");
         }
 
-        //printf("add connection %d to waiting queue \n", connfd);
-
         // add request to waiting queue.
         enqueue_noLock(waiting, connfd);
 
@@ -256,8 +231,6 @@ int main(int argc, char *argv[])
             pthread_cond_signal(&emptyWorkerThread);
             maxSignalsCounter++;
         }
-
-        //printf("(2) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
 
         threadUnlockWrapper(&lock);
     }
