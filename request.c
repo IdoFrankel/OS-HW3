@@ -132,7 +132,7 @@ void requestServeDynamic(int fd, char *filename, char *cgiargs)
       Execve(filename, emptylist, environ);
    }
    // Wait(NULL);
-   Wait(childPid);
+   Waitpid(childPid, NULL, 0);
 }
 
 void requestServeStatic(int fd, char *filename, int filesize)
