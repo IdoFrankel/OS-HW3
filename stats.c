@@ -1,9 +1,12 @@
 #include <stdlib.h>
 
+
 typedef struct req_stats
 {
-   unsigned long int arrivel_time;
-   unsigned long int dispatch_time;
+   //unsigned long int arrivel_time;
+   //unsigned long int dispatch_time;
+   struct timeval* arrivel_time;
+   struct timeval* dispatch_time;
 
 } req_stats;
 
@@ -24,8 +27,10 @@ typedef struct stats
 
 struct req_stats* createReqstats(){
     struct req_stats *rs = malloc(sizeof(*rs));
-    rs->arrivel_time = -1;
-    rs->dispatch_time = -1;
+    //rs->arrivel_time = -1;
+    //rs->dispatch_time = -1;
+    rs->arrivel_time = NULL;
+    rs->dispatch_time = NULL;
     return rs;
 }
 
@@ -45,7 +50,7 @@ struct stats* createstats(int id){
     return s;
 }
 
-unsigned long int getArrivelTime(struct stats* s){
+/*unsigned long int getArrivelTime(struct stats* s){
     return s->rs->arrivel_time;
 }
 
@@ -59,7 +64,24 @@ unsigned long int getDispatchTime(struct stats* s){
 
 void setDispatchTime(struct stats* s, unsigned long int dispatch){
     s->rs->dispatch_time = dispatch;
+}*/
+
+struct timeval* getArrivelTime(struct stats* s){
+    return s->rs->arrivel_time;
 }
+
+void setArrivelTime(struct stats* s, struct timeval* arrivel){
+    s->rs->arrivel_time = arrivel;
+}
+
+struct timeval* getDispatchTime(struct stats* s){
+    return s->rs->dispatch_time;
+}
+
+void setDispatchTime(struct stats* s, struct timeval* dispatch){
+    s->rs->dispatch_time = dispatch;
+}
+
 int getCount(struct stats* s){
     return s->ts->thread_count;
 }

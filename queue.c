@@ -17,7 +17,8 @@
 typedef struct node
 {
     int data;
-    unsigned long int request_arrivel;
+    //unsigned long int request_arrivel;
+    struct timeval* request_arrivel;
     struct node *next, *prev;
 } node;
 
@@ -36,7 +37,7 @@ struct queue *createQueue(int maxSize)
     return q;
 }
 
-void enqueue_noLock(struct queue *q, int data, unsigned long int req_arrivel)
+void enqueue_noLock(struct queue *q, int data, struct timeval* req_arrivel)
 {
     //printf("ttid = %d |\t queue.c 3\n", gettid());
     node *n = (struct node *)malloc(sizeof(struct node));
@@ -63,7 +64,7 @@ void enqueue_noLock(struct queue *q, int data, unsigned long int req_arrivel)
     //printf("ttid = %d |\t queue.c 6\n", gettid());
 }
 
-int dequeue_noLock(struct queue *q, unsigned long int* arrivel)
+int dequeue_noLock(struct queue *q, struct timeval* arrivel)
 {
     //printf("ttid = %d |\t queue.c 12\n", gettid());
 
@@ -88,7 +89,8 @@ int dequeue_noLock(struct queue *q, unsigned long int* arrivel)
     old_head->next = NULL;
     int data = old_head->data;
     if(arrivel != NULL){
-        *arrivel = old_head->request_arrivel;
+        arrivel->tv_sec = old_head->request_arrivel->tv_sec;
+        arrivel->tv_usec = old_head->request_arrivel->tv_usec;
     }
     
     //printf("ttid = %d |\t queue.c 12.4\n", gettid());

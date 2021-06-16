@@ -177,13 +177,14 @@ void WorkerThreadsHandler(void *stats_i)
             //printf("size(waiting) == 0 ** BUG **\n");
         }
         
-        struct timeval current_time;
-        unsigned long int time_in_ms;
-        connfd = dequeue_noLock(waiting,&time_in_ms);
-        gettimeofday(&current_time, NULL);
-        setArrivelTime((struct stats*)stats_i,time_in_ms);
-        time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi- time_in_ms;
-        setDispatchTime((struct stats*)stats_i,time_in_ms);
+        struct timeval* current_time = malloc(sizeof(*current_time));
+        //unsigned long int time_in_ms;
+        struct timeval* arrivel_time = malloc(sizeof(*arrivel_time));
+        connfd = dequeue_noLock(waiting,arrivel_time);
+        gettimeofday(current_time, NULL);
+        setArrivelTime((struct stats*)stats_i,arrivel_time);
+        //time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi- time_in_ms;
+        setDispatchTime((struct stats*)stats_i,current_time);
         runningSize += 1;
 
         threadUnlockWrapper(&lock);
@@ -243,12 +244,13 @@ int main(int argc, char *argv[])
     listenfd = Open_listenfd(port);
     while (1)
     {
-        struct timeval current_time;
-        unsigned long int time_in_ms;
+        struct timeval* current_time = malloc(sizeof(*current_time));
+        //unsigned long int time_in_ms;
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *)&clientlen);
-        gettimeofday(&current_time, NULL);
-        time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi;
+        gettimeofday(current_time, NULL);
+        //time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi;
+
         //printf("current time in seconds = %lu\n" , current_time.tv_sec);
         //printf("current time in micro seconds = %lu\n" , current_time.tv_usec);
 
@@ -283,7 +285,7 @@ int main(int argc, char *argv[])
         //printf("add connection %d to waiting queue \n", connfd);
 
         // add request to waiting queue.
-        enqueue_noLock(waiting, connfd, time_in_ms);
+        enqueue_noLock(waiting, connfd, current_time);
 
         // Signal any unemployed worker-thread can wake-up.
         pthread_cond_signal(&emptyWorkerThread);

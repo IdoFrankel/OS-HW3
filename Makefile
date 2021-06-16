@@ -6,7 +6,8 @@ OBJS = server.o request.o segel.o client.o queue.o stats.o
 TARGET = server
 
 CC = gcc
-CFLAGS = -g -Wall
+# CFLAGS = -g -Wall
+CFLAGS = -fsanitize=thread -g -Wall 
 
 LIBS = -lpthread #-lm
 
@@ -21,8 +22,8 @@ server: queue.o stats.o server.o request.o segel.o
 	$(CC) $(CFLAGS) -o server queue.o stats.o server.o request.o segel.o $(LIBS)
 
 client: client.o segel.o
-	$(CC) $(CFLAGS) -o client client.o segel.o
-
+#	$(CC) $(CFLAGS) -o client client.o segel.o
+	$(CC) $(CFLAGS) -o client client.o segel.o $(LIBS)
 output.cgi: output.c
 	$(CC) $(CFLAGS) -o output.cgi output.c
 
