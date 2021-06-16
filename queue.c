@@ -143,11 +143,20 @@ int dequeueByOrder(struct queue *q, int index){
         i++;
         pos = pos->next;
     }
-    (pos->prev)->next = pos->next;
-    (pos->next)->prev = pos->prev;
+    if(pos == q->front){
+        q->front = pos->next;
+        (pos->next)->prev = NULL;
+    } else if(pos == q->front){
+        q->back = pos->prev;
+        pos->prev->next = NULL;
+    } else{
+        (pos->prev)->next = pos->next;
+        (pos->next)->prev = pos->prev;
+    }
     int result = pos->data;
     pos->next = NULL;
     pos->prev = NULL;
     free(pos);
+    q->size--;
     return result;
 }
