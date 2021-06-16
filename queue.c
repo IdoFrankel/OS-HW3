@@ -146,7 +146,7 @@ int dequeueByOrder(struct queue *q, int index){
     if(pos == q->front){
         q->front = pos->next;
         (pos->next)->prev = NULL;
-    } else if(pos == q->front){
+    } else if(pos == q->back){
         q->back = pos->prev;
         pos->prev->next = NULL;
     } else{
