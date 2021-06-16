@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 
+
 #define TO_MILLi 1000
 #define QUARTER(num) 0.25*num
 
@@ -20,6 +21,7 @@
 #define gettid() ((pid_t)syscall(SYS_gettid))
 
 // TODO remove above when submitting
+
 
 //
 // server.c: A very, very simple web server
@@ -38,7 +40,7 @@ void getargs(int *port, int *threads, int *queue_size, char **schedalg, int argc
 {
     if (argc < 4)
     {
-        //fprintf(stderr, "Usage: %s <port> <threads> <queue_size> <schedalg>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <port> <threads> <queue_size> <schedalg>\n", argv[0]);
         exit(1);
     }
     *port = atoi(argv[1]);
@@ -89,10 +91,6 @@ void threadLockWrapper(pthread_mutex_t *lock)
 
 void OverloadHandling_Block()
 {
-    // TODO - QUESTION
-    // check if the implementation is good.
-    // when blocking, if new requests came, should we ignore them, or
-    // process them at later stage ??
     while (size(waiting) + runningSize == queue_size)
     {
         pthread_cond_wait(&emptyWorkerThread, &lock);
@@ -101,7 +99,6 @@ void OverloadHandling_Block()
 
 void OverloadHandling_DropTail(int conn)
 {
-    //printf("ttid = %d |\t server.c 51 - drop socket\n", gettid());
     threadUnlockWrapper(&lock);
     Close(conn);
     threadLockWrapper(&lock);
@@ -160,7 +157,6 @@ void OverloadHandling(char *schedalg, int conn)
 //deqeue **
 void WorkerThreadsHandler(void *stats_i)
 {
-    // //printf("ttid = %d |\t server.c 20\n", gettid());
     int connfd;
     while (1)
     {
@@ -173,8 +169,7 @@ void WorkerThreadsHandler(void *stats_i)
 
         if (size(waiting) == 0)
         {
-            // If reached here,
-            //printf("size(waiting) == 0 ** BUG **\n");
+            // If reached here, there is a bug.
         }
         
         struct timeval* current_time = malloc(sizeof(*current_time));
@@ -189,16 +184,10 @@ void WorkerThreadsHandler(void *stats_i)
 
         threadUnlockWrapper(&lock);
 
-        //printf("process connfd=%d\n", connfd);
-
         //process the request, and than close the connection.
         requestHandle(connfd, (struct stats*)stats_i);
 
-        //printf("close connfd=%d\n", connfd);
-
         Close(connfd);
-
-        //printf("done closing connfd=%d\n", connfd);
 
         threadLockWrapper(&lock);
         runningSize -= 1;
@@ -223,6 +212,7 @@ int main(int argc, char *argv[])
     pthread_mutex_init(&lock, NULL);
     pthread_cond_init(&emptyWorkerThread, NULL);
 
+    int maxSignalsCounter = 0;
 #pragma endregion
 
 #pragma region Worker thread poll initializing
@@ -256,8 +246,6 @@ int main(int argc, char *argv[])
 
         threadLockWrapper(&lock);
 
-        //printf("(1) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
-
         if (size(waiting) + runningSize == queue_size)
         {
             // if drop-head, but the waiting queue is empty, should ignore the new request.
@@ -282,15 +270,17 @@ int main(int argc, char *argv[])
             //printf("200 ****BUG *****\n");
         }
 
-        //printf("add connection %d to waiting queue \n", connfd);
-
         // add request to waiting queue.
         enqueue_noLock(waiting, connfd, current_time);
 
-        // Signal any unemployed worker-thread can wake-up.
-        pthread_cond_signal(&emptyWorkerThread);
-
-        //printf("(2) \t waiting = %d \t running=%d \t queue_size = %d \n", size(waiting), runningSize, queue_size);
+        // should signal in main to only maxRunningSize threads,
+        // any additional thread should be waked up when other requests is done.
+        if (maxSignalsCounter < maxRunningSize)
+        {
+            // Signal any unemployed worker-thread can wake-up.
+            pthread_cond_signal(&emptyWorkerThread);
+            maxSignalsCounter++;
+        }
 
         threadUnlockWrapper(&lock);
     }
