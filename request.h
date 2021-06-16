@@ -1,5 +1,5 @@
 #ifndef __REQUEST_H__
-
-void requestHandle(int fd);
+#include "stats.h"
+void requestHandle(int fd, struct stats* st);
 
 #endif

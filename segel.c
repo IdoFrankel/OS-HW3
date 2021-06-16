@@ -582,3 +582,13 @@ int Open_listenfd(int port)
         unix_error("Open_listenfd error");
     return rc;
 }
+
+
+int my_ceil(float num) {
+    int inum = (int)num;
+    if (num == (float)inum) {
+        return inum;
+    }
+    return inum + 1;
+}
+
