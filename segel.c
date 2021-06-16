@@ -80,6 +80,15 @@ pid_t Waitpid(pid_t pid, int *status, int options)
     return pid;
 }
 
+pid_t Wait(int *status)
+{
+    pid_t pid;
+
+    if ((pid = wait(status)) < 0)
+        unix_error("Wait error");
+    return pid;
+}
+
 /* $end wait */
 
 /********************************
