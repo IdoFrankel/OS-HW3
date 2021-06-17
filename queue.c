@@ -1,12 +1,10 @@
-#include <stdlib.h>
-#include <pthread.h>
 #include "segel.h"
 
 typedef struct node
 {
     int data;
     //unsigned long int request_arrivel;
-    struct timeval* request_arrivel;
+    struct timeval *request_arrivel;
     struct node *next, *prev;
 } node;
 
@@ -25,7 +23,7 @@ struct queue *createQueue(int maxSize)
     return q;
 }
 
-void enqueue_noLock(struct queue *q, int data, struct timeval* req_arrivel)
+void enqueue_noLock(struct queue *q, int data, struct timeval *req_arrivel)
 {
     node *n = (struct node *)malloc(sizeof(struct node));
     n->next = NULL;
@@ -48,7 +46,7 @@ void enqueue_noLock(struct queue *q, int data, struct timeval* req_arrivel)
     q->size += 1;
 }
 
-int dequeue_noLock(struct queue *q, struct timeval* arrivel)
+int dequeue_noLock(struct queue *q, struct timeval *arrivel)
 {
 
     node *old_head = q->front;
@@ -69,13 +67,13 @@ int dequeue_noLock(struct queue *q, struct timeval* arrivel)
     old_head->next = NULL;
     int data = old_head->data;
 
-    if(arrivel != NULL){
+    if (arrivel != NULL)
+    {
         arrivel->tv_sec = old_head->request_arrivel->tv_sec;
         arrivel->tv_usec = old_head->request_arrivel->tv_usec;
     }
-    
-    //printf("ttid = %d |\t queue.c 12.4\n", gettid());
 
+    //printf("ttid = %d |\t queue.c 12.4\n", gettid());
 
     free(old_head);
 
@@ -136,23 +134,35 @@ int maxSize(struct queue *q)
     return q->maxSize;
 }
 
-int dequeueByOrder(struct queue *q, int index){
-    struct node* pos = q->front;
+int dequeueByOrder(struct queue *q, int index)
+{
+    struct node *pos = q->front;
     int i = 1;
-    while(i != index){
+    while (i != index)
+    {
         i++;
         pos = pos->next;
     }
-    if(pos == q->front){
+    if (pos == q->front)
+    {
         q->front = pos->next;
         (pos->next)->prev = NULL;
-    } else if(pos == q->back){
+    }
+    if (pos == q->back)
+    {
         q->back = pos->prev;
         pos->prev->next = NULL;
-    } else{
-        (pos->prev)->next = pos->next;
+    }
+
+    if (pos->next != NULL)
+    {
         (pos->next)->prev = pos->prev;
     }
+    if (pos->prev != NULL)
+    {
+        (pos->prev)->next = pos->next;
+    }
+
     int result = pos->data;
     pos->next = NULL;
     pos->prev = NULL;

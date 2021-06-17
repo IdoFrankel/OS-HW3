@@ -6,22 +6,8 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 
-
 #define TO_MILLi 1000
-#define QUARTER(num) 0.25*num
-
-// TODO remove this when submiting.
-#include <unistd.h>
-#include <sys/syscall.h>
-
-#ifndef SYS_gettid
-#error "SYS_gettid unavailable on this system"
-#endif
-
-#define gettid() ((pid_t)syscall(SYS_gettid))
-
-// TODO remove above when submitting
-
+#define QUARTER(num) 0.25 * num
 
 //
 // server.c: A very, very simple web server
@@ -32,8 +18,6 @@
 // Repeatedly handles HTTP requests sent to this port number.
 // Most of the work is done within routines written in request.c
 //
-
-//TODO When using pthreads library add -pthread flag to make
 
 // HW3: Parse the new arguments too
 void getargs(int *port, int *threads, int *queue_size, char **schedalg, int argc, char *argv[])
@@ -55,10 +39,9 @@ int min(int a, int b)
 }
 
 #pragma region global stats
-struct stats** stats_arr;
+struct stats **stats_arr;
 //struct timeval current_time;
 #pragma endregion
-
 
 #pragma region locs and conditions
 int maxWorkingThreads, queue_size, runningSize, maxRunningSize;
@@ -74,6 +57,7 @@ void threadUnlockWrapper(pthread_mutex_t *lock)
     if (pthread_mutex_unlock(lock) != 0)
     {
         // ERROR while unlocking.
+        exit(1);
     }
 }
 
@@ -82,6 +66,7 @@ void threadLockWrapper(pthread_mutex_t *lock)
     if (pthread_mutex_lock(lock) != 0)
     {
         // ERROR while locking.
+        exit(1);
     }
 }
 
@@ -106,7 +91,7 @@ void OverloadHandling_DropTail(int conn)
 
 void OverloadHandling_DropHead()
 {
-    int tempConn = dequeue_noLock(waiting,NULL);
+    int tempConn = dequeue_noLock(waiting, NULL);
     threadUnlockWrapper(&lock);
     Close(tempConn);
     threadLockWrapper(&lock);
@@ -114,12 +99,12 @@ void OverloadHandling_DropHead()
 
 void OverloadHandling_Random()
 {
-    //TODO IMPLEMENT
     int drop_count = my_ceil(QUARTER(size(waiting)));
-    while(drop_count != 0){
+    while (drop_count != 0)
+    {
         // random numbers between 1 to drop_count
         int drop = (rand() % drop_count) + 1;
-        int drop_fd = dequeueByOrder(waiting,drop);
+        int drop_fd = dequeueByOrder(waiting, drop);
         close(drop_fd);
         drop_count--;
     }
@@ -142,7 +127,6 @@ void OverloadHandling(char *schedalg, int conn)
     }
     else if (strcmp(schedalg, "random") == 0)
     {
-        // TODO IMPLEMENT.
         OverloadHandling_Random();
     }
     else
@@ -171,21 +155,21 @@ void WorkerThreadsHandler(void *stats_i)
         {
             // If reached here, there is a bug.
         }
-        
-        struct timeval* current_time = malloc(sizeof(*current_time));
+
+        struct timeval *current_time = malloc(sizeof(*current_time));
         //unsigned long int time_in_ms;
-        struct timeval* arrivel_time = malloc(sizeof(*arrivel_time));
-        connfd = dequeue_noLock(waiting,arrivel_time);
+        struct timeval *arrivel_time = malloc(sizeof(*arrivel_time));
+        connfd = dequeue_noLock(waiting, arrivel_time);
         gettimeofday(current_time, NULL);
-        setArrivelTime((struct stats*)stats_i,arrivel_time);
+        setArrivelTime((struct stats *)stats_i, arrivel_time);
         //time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi- time_in_ms;
-        setDispatchTime((struct stats*)stats_i,current_time);
+        setDispatchTime((struct stats *)stats_i, current_time);
         runningSize += 1;
 
         threadUnlockWrapper(&lock);
 
         //process the request, and than close the connection.
-        requestHandle(connfd, (struct stats*)stats_i);
+        requestHandle(connfd, (struct stats *)stats_i);
 
         Close(connfd);
 
@@ -217,7 +201,7 @@ int main(int argc, char *argv[])
 
 #pragma region Worker thread poll initializing
     int val;
-    stats_arr = malloc(sizeof(*stats_arr)*maxWorkingThreads);
+    stats_arr = malloc(sizeof(*stats_arr) * maxWorkingThreads);
     for (int i = 0; i < maxWorkingThreads; i++)
     {
         pthread_t t;
@@ -234,7 +218,7 @@ int main(int argc, char *argv[])
     listenfd = Open_listenfd(port);
     while (1)
     {
-        struct timeval* current_time = malloc(sizeof(*current_time));
+        struct timeval *current_time = malloc(sizeof(*current_time));
         //unsigned long int time_in_ms;
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *)&clientlen);
@@ -249,7 +233,7 @@ int main(int argc, char *argv[])
         if (size(waiting) + runningSize == queue_size)
         {
             // if drop-head, but the waiting queue is empty, should ignore the new request.
-            if (size(waiting) == 0 && ((strcmp(schedalg, "dh") == 0) ||(strcmp(schedalg, "random") == 0)) )
+            if (size(waiting) == 0 && ((strcmp(schedalg, "dh") == 0) || (strcmp(schedalg, "random") == 0)))
             {
                 threadUnlockWrapper(&lock);
                 Close(connfd);
