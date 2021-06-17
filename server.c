@@ -3,9 +3,6 @@
 #include "queue.h"
 #include "stats.h"
 
-#include <unistd.h>
-#include <sys/syscall.h>
-
 #define TO_MILLi 1000
 #define QUARTER(num) 0.25 * num
 
