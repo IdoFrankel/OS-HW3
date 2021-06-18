@@ -156,7 +156,7 @@ void requestServeDynamic(int fd, char *filename, char *cgiargs, struct stats *st
    sprintf(buf, "%sStat-Thread-Id:: %d\r\n", buf, getId(st));
    sprintf(buf, "%sStat-Thread-Count:: %d\r\n", buf, getCount(st));
    sprintf(buf, "%sStat-Thread-Static:: %d\r\n", buf, getStatic(st));
-   sprintf(buf, "%sStat-Thread-Dynamic:: %d\r\n\r\n", buf, getDynamic(st));
+   sprintf(buf, "%sStat-Thread-Dynamic:: %d\r\n\", buf, getDynamic(st));
 
    Rio_writen(fd, buf, strlen(buf));
 
