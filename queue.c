@@ -73,8 +73,6 @@ int dequeue_noLock(struct queue *q, struct timeval *arrivel)
         arrivel->tv_usec = old_head->request_arrivel->tv_usec;
     }
 
-    //printf("ttid = %d |\t queue.c 12.4\n", gettid());
-
     free(old_head);
 
     return data;
