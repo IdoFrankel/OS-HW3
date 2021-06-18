@@ -193,7 +193,6 @@ int main(int argc, char *argv[])
     pthread_mutex_init(&lock, NULL);
     pthread_cond_init(&emptyWorkerThread, NULL);
 
-    int maxSignalsCounter = 0;
 #pragma endregion
 
 #pragma region Worker thread poll initializing
@@ -220,10 +219,6 @@ int main(int argc, char *argv[])
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *)&clientlen);
         gettimeofday(current_time, NULL);
-        //time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi;
-
-        //printf("current time in seconds = %lu\n" , current_time.tv_sec);
-        //printf("current time in micro seconds = %lu\n" , current_time.tv_usec);
 
         threadLockWrapper(&lock);
 
@@ -256,11 +251,10 @@ int main(int argc, char *argv[])
 
         // should signal in main to only maxRunningSize threads,
         // any additional thread should be waked up when other requests is done.
-        if (maxSignalsCounter < maxRunningSize)
+        if (runningSize < maxRunningSize)
         {
             // Signal any unemployed worker-thread can wake-up.
             pthread_cond_signal(&emptyWorkerThread);
-            maxSignalsCounter++;
         }
 
         threadUnlockWrapper(&lock);
