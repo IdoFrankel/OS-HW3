@@ -48,6 +48,7 @@ struct queue *waiting;
 
 pthread_mutex_t lock;
 pthread_cond_t emptyWorkerThread;
+pthread_cond_t UnblockingMainThread;
 
 void threadUnlockWrapper(pthread_mutex_t *lock)
 {
@@ -75,7 +76,7 @@ void OverloadHandling_Block()
 {
     while (size(waiting) + runningSize == queue_size)
     {
-        pthread_cond_wait(&emptyWorkerThread, &lock);
+        pthread_cond_wait(&UnblockingMainThread, &lock);
     }
 }
 
@@ -172,6 +173,7 @@ void WorkerThreadsHandler(void *stats_i)
 
         threadLockWrapper(&lock);
         runningSize -= 1;
+        pthread_cond_signal(&UnblockingMainThread);
         pthread_cond_signal(&emptyWorkerThread);
         threadUnlockWrapper(&lock);
     }
@@ -192,6 +194,7 @@ int main(int argc, char *argv[])
 
     pthread_mutex_init(&lock, NULL);
     pthread_cond_init(&emptyWorkerThread, NULL);
+    pthread_cond_init(&UnblockingMainThread, NULL);
 
 #pragma endregion
 
