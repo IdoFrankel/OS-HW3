@@ -74,7 +74,7 @@ void threadLockWrapper(pthread_mutex_t *lock)
 
 void OverloadHandling_Block()
 {
-    while (size(waiting) + runningSize == queue_size)
+    while (size(waiting) + runningSize >= queue_size)
     {
         pthread_cond_wait(&UnblockingMainThread, &lock);
     }
@@ -142,6 +142,9 @@ void WorkerThreadsHandler(void *stats_i)
     int connfd;
     while (1)
     {
+        struct timeval *current_time = malloc(sizeof(*current_time));
+        //unsigned long int time_in_ms;
+        struct timeval *arrivel_time = malloc(sizeof(*arrivel_time));
         threadLockWrapper(&lock);
         while (size(waiting) == 0 || runningSize == maxRunningSize)
         {
@@ -154,18 +157,20 @@ void WorkerThreadsHandler(void *stats_i)
             // If reached here, there is a bug.
         }
 
-        struct timeval *current_time = malloc(sizeof(*current_time));
-        //unsigned long int time_in_ms;
-        struct timeval *arrivel_time = malloc(sizeof(*arrivel_time));
+        // struct timeval *current_time = malloc(sizeof(*current_time));
+        // //unsigned long int time_in_ms;
+        // struct timeval *arrivel_time = malloc(sizeof(*arrivel_time));
+
         connfd = dequeue_noLock(waiting, arrivel_time);
-        gettimeofday(current_time, NULL);
-        setArrivelTime((struct stats *)stats_i, arrivel_time);
-        //time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi- time_in_ms;
-        setDispatchTime((struct stats *)stats_i, current_time);
+
         runningSize += 1;
 
         threadUnlockWrapper(&lock);
 
+        gettimeofday(current_time, NULL);
+        setArrivelTime((struct stats *)stats_i, arrivel_time);
+        //time_in_ms = current_time.tv_sec * TO_MILLi + current_time.tv_usec / TO_MILLi- time_in_ms;
+        setDispatchTime((struct stats *)stats_i, current_time);
         //process the request, and than close the connection.
         requestHandle(connfd, (struct stats *)stats_i);
 
@@ -176,6 +181,9 @@ void WorkerThreadsHandler(void *stats_i)
         pthread_cond_signal(&UnblockingMainThread);
         pthread_cond_signal(&emptyWorkerThread);
         threadUnlockWrapper(&lock);
+
+        free(current_time);
+        free(arrivel_time);
     }
 }
 
